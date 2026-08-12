@@ -1,0 +1,153 @@
+name: Build and Deploy
+
+on:
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAMESPACE: ${{ github.repository_owner }}
+  SERVER_HOST: ${{ vars.SERVER_HOST }}
+  SERVER_USER: ${{ vars.SERVER_USER }}
+  REMOTE_DIR: ${{ vars.BUSINESSTRON_REMOTE_DIR }}
+  PUBLIC_HOST: ${{ vars.BUSINESSTRON_PUBLIC_HOST }}
+
+jobs:
+  build-and-push:
+    name: Build & push server image (API + SPA)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    outputs:
+      image_tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          cache: true
+          cache-dependency-path: '**/*.csproj'
+
+      # The Web project's publish target runs `npm ci && npm run build` to stage the
+      # React app into wwwroot, so the runner needs Node.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+          cache-dependency-path: src/Businesstron.Web/ClientApp/package-lock.json
+
+      - name: Compute image tag
+        id: tag
+        run: echo "tag=${GITHUB_SHA::7}" >> "$GITHUB_OUTPUT"
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build & push businesstron-server (bakes in the SPA)
+        run: |
+          dotnet publish src/Businesstron.Web/Businesstron.Web.csproj \
+            -c Release \
+            /t:PublishContainer \
+            /p:ContainerRegistry=${{ env.REGISTRY }} \
+            /p:ContainerRepository=${{ env.IMAGE_NAMESPACE }}/businesstron-server \
+            /p:ContainerImageTags='"${{ steps.tag.outputs.tag }};latest"'
+
+  generate-compose:
+    name: Generate docker-compose
+    runs-on: ubuntu-latest
+    needs: build-and-push
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+          cache: true
+          cache-dependency-path: '**/*.csproj'
+
+      - name: Install Aspire CLI
+        run: dotnet tool install -g Aspire.Cli
+
+      - name: Generate publish artifacts
+        env:
+          # Baked into the caddy-docker-proxy labels + VITE_API_URL at publish time.
+          PublicHost: ${{ env.PUBLIC_HOST }}
+        run: aspire publish --project src/Businesstron.AppHost --output-path ./publish --non-interactive
+
+      - name: Write .env
+        run: |
+          # Ontraport + 2Captcha credentials are entered from the Settings UI and
+          # persisted on the businesstron-data volume — no longer passed at deploy time.
+          cat > publish/.env <<EOF
+          BUSINESSTRON_SERVER_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/businesstron-server:${{ needs.build-and-push.outputs.image_tag }}
+          POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          EOF
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: compose
+          path: publish/
+          include-hidden-files: true
+
+  deploy:
+    name: Deploy to server
+    runs-on: ubuntu-latest
+    needs: [build-and-push, generate-compose]
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: compose
+          path: publish/
+
+      # Strip any stray whitespace/newlines a repo Variable may have been pasted
+      # with — otherwise a trailing newline breaks the scp/ssh command lines below.
+      - name: Sanitize deploy vars
+        run: |
+          {
+            echo "SERVER_HOST=$(printf '%s' "$SERVER_HOST" | tr -d '[:space:]')"
+            echo "SERVER_USER=$(printf '%s' "$SERVER_USER" | tr -d '[:space:]')"
+            echo "REMOTE_DIR=$(printf '%s' "$REMOTE_DIR" | tr -d '[:space:]')"
+          } >> "$GITHUB_ENV"
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H "${{ env.SERVER_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Bootstrap server (Docker + caddy network if missing)
+        run: |
+          ssh -i ~/.ssh/deploy_key "${{ env.SERVER_USER }}@${{ env.SERVER_HOST }}" bash <<'EOF'
+            set -e
+            if ! command -v docker >/dev/null 2>&1; then
+              curl -fsSL https://get.docker.com | sudo sh
+              sudo usermod -aG docker $USER
+            fi
+            # The shared caddy-docker-proxy network (created once; Renewtron uses it too).
+            sudo docker network inspect caddy >/dev/null 2>&1 || sudo docker network create caddy
+            mkdir -p "${{ env.REMOTE_DIR }}"
+          EOF
+
+      - name: Copy compose files
+        run: |
+          scp -i ~/.ssh/deploy_key \
+            publish/docker-compose.yaml \
+            publish/.env \
+            "${{ env.SERVER_USER }}@${{ env.SERVER_HOST }}:${{ env.REMOTE_DIR }}/"
+
+      - name: Deploy
+        run: |
+          ssh -i ~/.ssh/deploy_key "${{ env.SERVER_USER }}@${{ env.SERVER_HOST }}" bash <<EOF
+            set -e
+            cd "${{ env.REMOTE_DIR }}"
+            echo "${{ secrets.GITHUB_TOKEN }}" | sudo docker login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin
+            sudo docker compose pull
+            sudo docker compose up -d --remove-orphans
+            sudo docker image prune -f
+          EOF

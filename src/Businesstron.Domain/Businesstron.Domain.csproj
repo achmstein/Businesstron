@@ -1,0 +1,13 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Using Include="Businesstron.Domain.Common" />
+    <Using Include="Businesstron.Domain.Entities" />
+    <Using Include="Businesstron.Domain.Enums" />
+  </ItemGroup>
+
+</Project>

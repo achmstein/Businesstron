@@ -1,0 +1,13 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Businesstron.AppHost/Businesstron.AppHost.csproj" />
+    <Project Path="src/Businesstron.Web/Businesstron.Web.csproj" />
+    <Project Path="src/Businesstron.Infrastructure/Businesstron.Infrastructure.csproj" />
+    <Project Path="src/Businesstron.Application/Businesstron.Application.csproj" />
+    <Project Path="src/Businesstron.Domain/Businesstron.Domain.csproj" />
+    <Project Path="src/Businesstron.ServiceDefaults/Businesstron.ServiceDefaults.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Businesstron.Domain.UnitTests/Businesstron.Domain.UnitTests.csproj" />
+  </Folder>
+</Solution>

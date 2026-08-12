@@ -1,0 +1,36 @@
+# caddy-docker-proxy — the host's shared reverse proxy + automatic HTTPS.
+#
+# Run this ONCE per server. It reads Docker labels (set by the Businesstron AppHost's
+# compose output) to route <PublicHost> -> businesstron-server:8080 and provision a
+# Let's Encrypt certificate automatically. If this host already runs it (e.g. for
+# Renewtron), you can skip this file — Businesstron just joins the existing `caddy`
+# network via labels.
+#
+#   docker network create caddy   # if it doesn't exist yet
+#   docker compose -f deploy/caddy/docker-compose.yml up -d
+
+services:
+  caddy:
+    image: lucaslorentz/caddy-docker-proxy:2.9-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      CADDY_INGRESS_NETWORKS: caddy
+      # Contact address for Let's Encrypt; override per host.
+      CADDY_DOCKER_CADDYFILE_PATH: /config/Caddyfile
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - caddy
+
+networks:
+  caddy:
+    external: true
+
+volumes:
+  caddy_data:
+  caddy_config:

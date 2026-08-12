@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <RootNamespace>Businesstron.Infrastructure</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Identity cookie auth + API endpoints and Hangfire.AspNetCore need the ASP.NET Core framework. -->
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+    <ProjectReference Include="..\Businesstron.Application\Businesstron.Application.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Using Include="Businesstron.Domain.Entities" />
+    <Using Include="Businesstron.Domain.Enums" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Persistence -->
+    <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
+    <PackageReference Include="Microsoft.AspNetCore.Identity.EntityFrameworkCore" Version="10.0.1" />
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="10.0.4">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers; buildtransitive</IncludeAssets>
+    </PackageReference>
+
+    <!-- Background jobs -->
+    <PackageReference Include="Hangfire.Core" Version="1.8.21" />
+    <PackageReference Include="Hangfire.AspNetCore" Version="1.8.21" />
+    <PackageReference Include="Hangfire.PostgreSql" Version="1.20.12" />
+
+    <!-- External clients / scraping / export -->
+    <PackageReference Include="AngleSharp" Version="1.4.0" />
+    <PackageReference Include="2captcha-csharp" Version="1.4.0" />
+    <PackageReference Include="CsvHelper" Version="33.1.0" />
+  </ItemGroup>
+
+</Project>
