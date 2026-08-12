@@ -2,7 +2,12 @@
 
 Businesstron finds newly registered Australian business names, enriches them from the
 **ASIC** business-names registry and the **ABR**, filters out unsuitable leads by
-keyword, and pushes the good ones into **Ontraport** — all from one web app.
+keyword, optionally hunts down each lead's **website and contact email**, and pushes
+the good ones into **Ontraport** — all from one web app.
+
+It is a fork of **Asictron** (which does the ASIC/ABR/filter/Ontraport pipeline) with
+an added, opt-in **web-enrichment stage** that ports the `ReverseWhois` and `AudaTron`
+console tools into the pipeline.
 
 It began as a console tool; it is now a **.NET 10 Clean Architecture** web app
 (Jason Taylor layering) deployed as a single container with **.NET Aspire**,
@@ -12,13 +17,19 @@ It began as a console tool; it is now a **.NET 10 Clean Architecture** web app
 
 ```
 New search ─▶ fetch source items ─▶ ASIC + ABR lookup per ABN ─▶ evaluate
-suitability (keyword blacklist) ─▶ persist records ─▶ push suitable leads to
-Ontraport (tag / sequence) ─▶ CSV export
+suitability (keyword blacklist) ─▶ persist records
+  │
+  ├─ (opt-in) web enrichment: for suitable records renewing within 12 months,
+  │     reverse-whois the ABN ─▶ domains ─▶ auda WHOIS per domain until an
+  │     email is found ─▶ (stubbed) contact enrichment for phone / socials
+  │
+  └─▶ push suitable leads to Ontraport (tag / sequence) ─▶ CSV export
 ```
 
 - **Source:** newly registered names from `data.gov.au` (by date range) **or** a pasted ABN list.
 - **Filter:** a business name containing any active keyword (e.g. `gov`, `legal`) is flagged unsuitable and excluded from the push. Keywords are editable in the UI.
-- **Ontraport:** suitable records are created as contacts and (optionally) tagged / subscribed to a sequence. Runs automatically after a search when enabled, or on demand via **Push to Ontraport**.
+- **Web enrichment (opt-in):** toggle **Find websites & contacts** on a new search (or run it later on an existing run). For each suitable record whose ASIC renewal date is within 12 months, it reverse-whois-es the holder's ABN via **WhoisXML** to find domains, then looks each domain up on **auda** (reusing the 2Captcha solver) until one returns a contact email, trying the next domain when one has none. Off by default — each record spends WhoisXML + CAPTCHA credits. The final phone/socials step is a stubbed `IContactEnricher` seam (Google Places / AI website-scrape) to wire up later.
+- **Ontraport:** suitable records are created as contacts and (optionally) tagged / subscribed to a sequence. When web enrichment is enabled, the auto-push is deferred until emails are populated so the discovered email is included. Runs automatically after a search when enabled, or on demand via **Push to Ontraport**.
 
 ## Solution layout
 
@@ -27,7 +38,8 @@ src/
   Businesstron.Domain           Entities, enums, the pure SuitabilityEvaluator
   Businesstron.Application       CQRS (MediatR), interfaces, DTOs, validators, behaviours
   Businesstron.Infrastructure    EF Core (PostgreSQL) + Identity, Hangfire jobs,
-                             external gateways (ASIC / ABR / data.gov / Ontraport / 2Captcha)
+                             external gateways (ASIC / ABR / data.gov / Ontraport /
+                             2Captcha / WhoisXML / auda), the WebEnrichmentService
   Businesstron.Web               Minimal-API endpoints + Program.cs; hosts the React SPA
     ClientApp/               React 19 + Vite + Tailwind (built into wwwroot on publish)
   Businesstron.AppHost           .NET Aspire orchestration (Postgres + server + Vite dev)
@@ -64,9 +76,11 @@ and seeded automatically on startup.
 
 ### Configuration & secrets
 
-Ontraport (App ID / API Key) and 2Captcha (API Key) credentials are entered from
-the **Settings** UI. They are written to a `settings.overrides.json` layer that the
-app reloads live (`IOptionsMonitor`), so edits take effect without a restart. In
+Ontraport (App ID / API Key), 2Captcha (API Key) and **WhoisXML** (reverse-WHOIS API
+Key) credentials are entered from the **Settings** UI. They are written to a
+`settings.overrides.json` layer that the app reloads live (`IOptionsMonitor`), so edits
+take effect without a restart. Web enrichment needs both the WhoisXML key (reverse-whois)
+and the 2Captcha key (auda uses its public reCAPTCHA site key). In
 the deployed container that file lives on the persistent **`businesstron-data`** volume
 (`Storage:OverridesPath=/data/settings.overrides.json`), so it survives redeploys.
 Other operational settings (keyword blacklist, Ontraport tag/sequence, auto-push)
@@ -120,10 +134,14 @@ UI after the first deploy; they persist on the `businesstron-data` volume.
 
 ## Open items to confirm with the client
 
-- **Ontraport field mapping.** ASIC records carry **no email**, so contacts are
-  created (not merged on email) with company/name/address; ABN is parked in a
-  placeholder field. Confirm the real field mapping + target tag/sequence, and
-  whether outreach is email or postal.
+- **Ontraport field mapping.** ASIC records carry **no email** on their own; when web
+  enrichment runs, the auda-discovered email is attached to the contact, otherwise
+  contacts are created with company/name/address and ABN in a placeholder field.
+  Confirm the real field mapping + target tag/sequence, and whether outreach is email
+  or postal.
+- **Contact enrichment provider.** The phone/socials step is a `NoOpContactEnricher`
+  stub. Decide on Google Places / My Business vs an AI website-scrape (or both) and
+  implement `IContactEnricher` — no pipeline changes needed, just swap the DI line.
 - **Default keywords.** Seeded with `gov, government, council, legal, law, …` —
   adjust in **Keywords**.
 - **Deploy host / domain.** Set `BUSINESSTRON_PUBLIC_HOST` and the SSH/deploy vars.
