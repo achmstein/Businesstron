@@ -10,6 +10,9 @@ public sealed record TwoCaptchaCredentials(
     int RecaptchaTimeoutSeconds,
     int PollingIntervalSeconds);
 
+/// <summary>WhoisXML (reverse-WHOIS) API key, editable from the Settings UI.</summary>
+public sealed record WhoisXmlCredentials(string? ApiKey);
+
 /// <summary>ASIC enrichment tuning and connection routing, editable from the Settings UI.</summary>
 /// <param name="MaxConcurrency">Parallel ASIC sessions per run.</param>
 /// <param name="ForceTls13">Advertise TLS 1.3 only, so Cloudflare doesn't fingerprint the handshake as a bot.</param>
@@ -52,6 +55,10 @@ public interface ISettingsService
     TwoCaptchaCredentials GetTwoCaptchaCredentials();
 
     Task UpdateTwoCaptchaCredentialsAsync(TwoCaptchaCredentials credentials, CancellationToken cancellationToken);
+
+    WhoisXmlCredentials GetWhoisXmlCredentials();
+
+    Task UpdateWhoisXmlCredentialsAsync(WhoisXmlCredentials credentials, CancellationToken cancellationToken);
 
     AsicSettings GetAsicSettings();
 

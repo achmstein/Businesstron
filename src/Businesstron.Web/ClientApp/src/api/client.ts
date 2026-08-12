@@ -47,12 +47,22 @@ export interface SearchRunDto {
   errorCount: number
   appliedKeywords: string[]
   tags: string[]
+  enableWebEnrichment: boolean
   createdBy: string | null
   created: string
   startedAt: string | null
   completedAt: string | null
   error: string | null
 }
+
+export type WebEnrichmentStatus =
+  | 'NotAttempted'
+  | 'Pending'
+  | 'Skipped'
+  | 'NoWebsite'
+  | 'NoEmail'
+  | 'Enriched'
+  | 'Failed'
 
 export interface PaginatedList<T> {
   items: T[]
@@ -81,6 +91,13 @@ export interface BusinessNameRecordDto {
   ontraportContactId: string | null
   ontraportError: string | null
   pushedAt: string | null
+  webEnrichmentStatus: WebEnrichmentStatus
+  webEnrichmentError: string | null
+  websites: string | null
+  contactEmail: string | null
+  contactEmails: string | null
+  contactPhone: string | null
+  contactSocials: string | null
 }
 
 export interface SearchRunDetail {
@@ -152,6 +169,11 @@ export interface CreateSearchRunInput {
   abnListRaw?: string | null
   keywords?: string[] | null
   tags?: string[] | null
+  enableWebEnrichment?: boolean
+}
+
+export interface WhoisXmlCredentials {
+  apiKey: string | null
 }
 
 export const api = {
@@ -172,6 +194,7 @@ export const api = {
     push: (id: string) => apiFetch<void>(`/api/search-runs/${id}/push`, { method: 'POST' }),
     cancel: (id: string) => apiFetch<void>(`/api/search-runs/${id}/cancel`, { method: 'POST' }),
     retryFailed: (id: string) => apiFetch<void>(`/api/search-runs/${id}/retry`, { method: 'POST' }),
+    enrichWeb: (id: string) => apiFetch<void>(`/api/search-runs/${id}/enrich-web`, { method: 'POST' }),
     remove: (id: string) => apiFetch<void>(`/api/search-runs/${id}`, { method: 'DELETE' }),
     exportHref: (id: string, onlySuitable = false) =>
       `/api/search-runs/${id}/export${onlySuitable ? '?onlySuitable=true' : ''}`,
@@ -205,6 +228,9 @@ export const api = {
     getCaptcha: () => apiFetch<TwoCaptchaCredentials>('/api/settings/captcha'),
     updateCaptcha: (input: TwoCaptchaCredentials) =>
       apiFetch<void>('/api/settings/captcha', { method: 'PUT', body: JSON.stringify(input) }),
+    getWhoisXml: () => apiFetch<WhoisXmlCredentials>('/api/settings/whoisxml'),
+    updateWhoisXml: (input: WhoisXmlCredentials) =>
+      apiFetch<void>('/api/settings/whoisxml', { method: 'PUT', body: JSON.stringify(input) }),
     getAsic: () => apiFetch<AsicSettings>('/api/settings/asic'),
     updateAsic: (input: AsicSettingsInput) =>
       apiFetch<void>('/api/settings/asic', { method: 'PUT', body: JSON.stringify(input) }),

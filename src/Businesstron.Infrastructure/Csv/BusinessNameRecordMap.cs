@@ -21,5 +21,12 @@ public sealed class BusinessNameRecordMap : ClassMap<BusinessNameRecord>
         Map(m => m.AbnStatus).Name("ABN Status");
         Map(m => m.Gst).Name("Goods & Services Tax (GST)");
         Map(m => m.HasMultipleBusinessNames).Name("Has Multiple Business Names");
+
+        // Web-enrichment columns (blank until the web stage runs for the record).
+        Map(m => m.Websites).Name("Websites");
+        Map(m => m.ContactEmail).Name("Contact Email");
+        Map(m => m.ContactEmails).Name("All Emails");
+        Map(m => m.ContactPhone).Name("Contact Phone");
+        Map(m => m.ContactSocials).Name("Socials");
     }
 }

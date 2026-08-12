@@ -15,7 +15,15 @@ public class BusinessNameRecordConfiguration : IEntityTypeConfiguration<Business
         builder.Property(r => r.OntraportContactId).HasMaxLength(64);
         builder.Property(r => r.OntraportError).HasMaxLength(1000);
 
+        builder.Property(r => r.WebEnrichmentError).HasMaxLength(1000);
+        builder.Property(r => r.Websites).HasMaxLength(4000);
+        builder.Property(r => r.ContactEmail).HasMaxLength(320);
+        builder.Property(r => r.ContactEmails).HasMaxLength(2000);
+        builder.Property(r => r.ContactPhone).HasMaxLength(64);
+        builder.Property(r => r.ContactSocials).HasMaxLength(2000);
+
         builder.HasIndex(r => r.SearchRunId);
         builder.HasIndex(r => r.IsSuitable);
+        builder.HasIndex(r => r.WebEnrichmentStatus);
     }
 }

@@ -47,4 +47,27 @@ public class BusinessNameRecord : BaseEntity
     public string? OntraportError { get; set; }
 
     public DateTimeOffset? PushedAt { get; set; }
+
+    // --- Web enrichment (reverse-whois -> auda email -> contact) ---
+
+    /// <summary>Where this row sits in the optional web-enrichment stage.</summary>
+    public WebEnrichmentStatus WebEnrichmentStatus { get; set; } = WebEnrichmentStatus.NotAttempted;
+
+    /// <summary>Why web enrichment failed for this record, if it did.</summary>
+    public string? WebEnrichmentError { get; set; }
+
+    /// <summary>Domains found for the holder via reverse-whois, comma-separated (in the order tried).</summary>
+    public string? Websites { get; set; }
+
+    /// <summary>Primary contact email — the first email found across the holder's domains.</summary>
+    public string? ContactEmail { get; set; }
+
+    /// <summary>All contact emails found via auda, semicolon-separated.</summary>
+    public string? ContactEmails { get; set; }
+
+    /// <summary>Contact phone number, populated later by the contact-enrichment step.</summary>
+    public string? ContactPhone { get; set; }
+
+    /// <summary>Social-media links, populated later by the contact-enrichment step.</summary>
+    public string? ContactSocials { get; set; }
 }

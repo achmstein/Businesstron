@@ -43,6 +43,16 @@ public static class SettingsEndpoints
             return Results.NoContent();
         });
 
+        // WhoisXML (reverse-WHOIS) API key — persisted to the writable overrides file.
+        group.MapGet("/whoisxml", (ISettingsService settings) =>
+            Results.Ok(settings.GetWhoisXmlCredentials()));
+
+        group.MapPut("/whoisxml", async (WhoisXmlCredentials body, ISettingsService settings, CancellationToken ct) =>
+        {
+            await settings.UpdateWhoisXmlCredentialsAsync(body, ct);
+            return Results.NoContent();
+        });
+
         // ASIC enrichment tuning and proxy routing — persisted to the writable overrides file.
         group.MapGet("/asic", (ISettingsService settings) =>
         {

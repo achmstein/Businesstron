@@ -26,6 +26,13 @@ public class SearchRun : BaseAuditableEntity
     /// <summary>Optional comma-separated labels so the admin can tell runs apart (e.g. "NSW, plumbers").</summary>
     public string? Tags { get; set; }
 
+    /// <summary>
+    /// Opt-in: after ASIC/ABR enrichment, continue into the web stage (reverse-whois →
+    /// auda email → contact) for suitable records whose renewal is within the lead
+    /// window. Off by default because each record spends whois + CAPTCHA credits.
+    /// </summary>
+    public bool EnableWebEnrichment { get; set; }
+
     public SearchRunStatus Status { get; set; } = SearchRunStatus.Pending;
 
     /// <summary>Set by the user to stop a running search; the processor checks this cooperatively.</summary>

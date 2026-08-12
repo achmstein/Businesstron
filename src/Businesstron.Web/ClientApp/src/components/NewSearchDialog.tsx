@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
+import { Switch } from '@/components/ui/switch'
 import KeywordSelector from './KeywordSelector'
 import TagInput from './TagInput'
 import { cn } from '@/lib/utils'
@@ -19,6 +20,7 @@ export default function NewSearchDialog({ open, onOpenChange }: { open: boolean;
   const [abnListRaw, setAbnListRaw] = useState('')
   const [keywords, setKeywords] = useState<string[]>([])
   const [tags, setTags] = useState<string[]>([])
+  const [enableWebEnrichment, setEnableWebEnrichment] = useState(false)
   const [busy, setBusy] = useState(false)
   const navigate = useNavigate()
 
@@ -35,6 +37,7 @@ export default function NewSearchDialog({ open, onOpenChange }: { open: boolean;
         abnListRaw: source === 'AbnList' ? abnListRaw : null,
         keywords,
         tags,
+        enableWebEnrichment,
       })
       toast.success('Search started')
       onOpenChange(false)
@@ -111,6 +114,17 @@ export default function NewSearchDialog({ open, onOpenChange }: { open: boolean;
           <div className="space-y-1.5">
             <Label>Filter keywords for this run</Label>
             <KeywordSelector onChange={onKeywords} />
+          </div>
+
+          <div className="flex items-start justify-between gap-4 rounded-lg border p-3">
+            <div className="space-y-0.5">
+              <Label htmlFor="web-enrichment" className="cursor-pointer">Find websites &amp; contacts</Label>
+              <p className="text-xs text-muted-foreground">
+                After enrichment, reverse-whois suitable leads renewing within 12 months, then
+                look up a contact email. Uses WhoisXML + CAPTCHA credits.
+              </p>
+            </div>
+            <Switch id="web-enrichment" checked={enableWebEnrichment} onCheckedChange={setEnableWebEnrichment} />
           </div>
 
           <DialogFooter>

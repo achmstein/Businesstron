@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { ArrowLeft, Download, Send, AlertTriangle, Square, RotateCcw, Trash2, Pencil, Tag, X } from 'lucide-react'
+import { ArrowLeft, Download, Send, AlertTriangle, Square, RotateCcw, Trash2, Pencil, Tag, X, Globe } from 'lucide-react'
 import { toast } from 'sonner'
-import { api, type RecordFilter, type SearchRunDetail } from '../api/client'
+import { api, type RecordFilter, type SearchRunDetail, type WebEnrichmentStatus } from '../api/client'
 import StatusBadge from '../components/StatusBadge'
 import PipelineMonitor from '../components/PipelineMonitor'
 import ConfirmDialog from '../components/ConfirmDialog'
@@ -16,12 +16,25 @@ import { cn } from '@/lib/utils'
 // Keyword chips shown before collapsing behind "+N more" (runs can carry hundreds).
 const KEYWORDS_PREVIEW = 8
 
+// Friendly label for a record with no email/website yet, based on why.
+function webStatusLabel(status: WebEnrichmentStatus): string {
+  switch (status) {
+    case 'Pending': return 'Queued…'
+    case 'NoWebsite': return 'No website'
+    case 'NoEmail': return 'No email'
+    case 'Failed': return 'Failed'
+    case 'Skipped': return 'Out of window'
+    default: return '—'
+  }
+}
+
 export default function SearchDetailPage() {
   const { id } = useParams<{ id: string }>()
   const [data, setData] = useState<SearchRunDetail | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pushing, setPushing] = useState(false)
   const [busy, setBusy] = useState(false)
+  const [webBusy, setWebBusy] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
   const [showAllKeywords, setShowAllKeywords] = useState(false)
   const [page, setPage] = useState(1)
@@ -88,6 +101,20 @@ export default function SearchDetailPage() {
       toast.error(err instanceof Error ? err.message : 'Failed to retry')
     } finally {
       setBusy(false)
+    }
+  }
+
+  const enrichWeb = async () => {
+    if (!id) return
+    setWebBusy(true)
+    try {
+      await api.searchRuns.enrichWeb(id)
+      toast.success('Finding websites & contacts', { description: 'Reverse-whois then a contact-email lookup for suitable leads renewing within 12 months.' })
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to start web enrichment')
+    } finally {
+      setWebBusy(false)
     }
   }
 
@@ -169,6 +196,17 @@ export default function SearchDetailPage() {
               title={`${failedCount.toLocaleString()} failed + ${pendingCount.toLocaleString()} pending`}
             >
               <RotateCcw className="size-4" /> Retry {retryable.toLocaleString()}
+            </Button>
+          )}
+          {run.status !== 'Running' && run.status !== 'Pending' && run.suitableCount > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={enrichWeb}
+              disabled={webBusy}
+              title="Reverse-whois suitable leads renewing within 12 months, then look up a contact email"
+            >
+              <Globe className="size-4" /> {webBusy ? 'Starting…' : run.enableWebEnrichment ? 'Re-run web enrichment' : 'Find websites & contacts'}
             </Button>
           )}
           <Button asChild variant="outline" size="sm"><a href={api.searchRuns.exportHref(run.id, false)}><Download className="size-4" /> CSV</a></Button>
@@ -305,13 +343,14 @@ export default function SearchDetailPage() {
               <TableHead>ABN status</TableHead>
               <TableHead>Enrichment</TableHead>
               <TableHead>Suitable</TableHead>
+              {run.enableWebEnrichment && <TableHead>Websites &amp; email</TableHead>}
               <TableHead>Ontraport</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {records.length === 0 && (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={7}>
+                <TableCell colSpan={run.enableWebEnrichment ? 8 : 7}>
                   <div className="py-12 text-center text-sm text-muted-foreground">
                     {filter
                       ? `No ${filter} records.`
@@ -324,6 +363,7 @@ export default function SearchDetailPage() {
             )}
             {records.map((r) => {
               const pending = r.enrichmentStatus === 'Pending'
+              const websites = r.websites ? r.websites.split(',').filter(Boolean) : []
               return (
                 <TableRow key={r.id} className={cn(!r.isSuitable && !pending && 'bg-amber-500/5', pending && 'opacity-60')}>
                   <TableCell className="max-w-[16rem] truncate font-medium" title={r.businessName ?? undefined}>{r.businessName || <span className="text-muted-foreground">—</span>}</TableCell>
@@ -352,6 +392,32 @@ export default function SearchDetailPage() {
                       </Tooltip>
                     )}
                   </TableCell>
+                  {run.enableWebEnrichment && (
+                    <TableCell className="max-w-[15rem] text-xs">
+                      {r.contactEmail && (
+                        <div className="truncate">
+                          <a href={`mailto:${r.contactEmail}`} className="font-mono text-primary hover:underline" title={r.contactEmails ?? undefined}>{r.contactEmail}</a>
+                        </div>
+                      )}
+                      {websites.length > 0 && (
+                        <div className="truncate text-muted-foreground" title={websites.join(', ')}>
+                          <a href={`https://${websites[0]}`} target="_blank" rel="noreferrer" className="hover:underline">{websites[0]}</a>
+                          {websites.length > 1 && <span> +{websites.length - 1}</span>}
+                        </div>
+                      )}
+                      {r.contactPhone && <div className="text-muted-foreground">{r.contactPhone}</div>}
+                      {!r.contactEmail && websites.length === 0 && (
+                        r.webEnrichmentError ? (
+                          <Tooltip>
+                            <TooltipTrigger className="text-muted-foreground">{webStatusLabel(r.webEnrichmentStatus)}</TooltipTrigger>
+                            <TooltipContent className="max-w-xs">{r.webEnrichmentError}</TooltipContent>
+                          </Tooltip>
+                        ) : (
+                          <span className="text-muted-foreground">{webStatusLabel(r.webEnrichmentStatus)}</span>
+                        )
+                      )}
+                    </TableCell>
+                  )}
                   <TableCell>
                     {r.ontraportError ? (
                       <Tooltip>

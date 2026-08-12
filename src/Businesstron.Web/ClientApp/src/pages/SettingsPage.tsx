@@ -92,6 +92,10 @@ export default function SettingsPage() {
   })
   const [captchaBusy, setCaptchaBusy] = useState(false)
 
+  // WhoisXML: reverse-WHOIS API key for the web-enrichment stage.
+  const [whoisXmlKey, setWhoisXmlKey] = useState('')
+  const [whoisXmlBusy, setWhoisXmlBusy] = useState(false)
+
   // ASIC enrichment: parallel session count, hard-capped by the server.
   const [maxConcurrency, setMaxConcurrency] = useState('')
   const [concurrencyLimit, setConcurrencyLimit] = useState(16)
@@ -110,11 +114,12 @@ export default function SettingsPage() {
   useEffect(() => {
     void (async () => {
       try {
-        const [creds, cfg, cap, asic] = await Promise.all([
+        const [creds, cfg, cap, asic, whois] = await Promise.all([
           api.settings.getOntraportCredentials(),
           api.settings.getOntraport(),
           api.settings.getCaptcha(),
           api.settings.getAsic(),
+          api.settings.getWhoisXml(),
         ])
         setAppId(creds.appId ?? '')
         setApiKey(creds.apiKey ?? '')
@@ -122,6 +127,7 @@ export default function SettingsPage() {
         setSequenceId(cfg.sequenceId?.toString() ?? '')
         setAutoPush(cfg.autoPushEnabled)
         setCaptcha({ ...cap, apiKey: cap.apiKey ?? '' })
+        setWhoisXmlKey(whois.apiKey ?? '')
         setMaxConcurrency(asic.maxConcurrency.toString())
         setConcurrencyLimit(asic.maxConcurrencyLimit)
         setForceTls13(asic.forceTls13)
@@ -136,6 +142,7 @@ export default function SettingsPage() {
 
   const ontraportConfigured = appId.trim().length > 0 && apiKey.trim().length > 0
   const captchaConfigured = (captcha.apiKey ?? '').trim().length > 0
+  const whoisXmlConfigured = whoisXmlKey.trim().length > 0
 
   const saveOntraport = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -215,6 +222,19 @@ export default function SettingsPage() {
       toast.error(err instanceof Error ? err.message : 'Failed to save')
     } finally {
       setCaptchaBusy(false)
+    }
+  }
+
+  const saveWhoisXml = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setWhoisXmlBusy(true)
+    try {
+      await api.settings.updateWhoisXml({ apiKey: whoisXmlKey.trim() || null })
+      toast.success('Reverse WHOIS settings saved')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to save')
+    } finally {
+      setWhoisXmlBusy(false)
     }
   }
 
@@ -324,6 +344,41 @@ export default function SettingsPage() {
 
         <div className="flex justify-end">
           <Button type="submit" disabled={captchaBusy}>{captchaBusy ? 'Saving…' : 'Save 2Captcha'}</Button>
+        </div>
+      </form>
+
+      {/* Reverse WHOIS (WhoisXML) */}
+      <form onSubmit={saveWhoisXml} className="space-y-4">
+        <div>
+          <div className="flex items-center justify-between gap-3">
+            <h2 className="font-display text-lg font-semibold tracking-tight">Reverse WHOIS</h2>
+            <StatusPill configured={whoisXmlConfigured} />
+          </div>
+          <p className="mt-0.5 text-sm text-muted-foreground">
+            Finds a business's domains by ABN for the "Find websites &amp; contacts" stage.
+          </p>
+        </div>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">API credentials</CardTitle>
+            <CardDescription>The WhoisXML API key (Domains Research Suite), from your whoisxmlapi.com account.</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="space-y-1.5">
+              <Label htmlFor="whoisXmlKey">API Key</Label>
+              <SecretInput
+                id="whoisXmlKey"
+                value={whoisXmlKey}
+                onChange={setWhoisXmlKey}
+                placeholder="WhoisXML API key"
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-end">
+          <Button type="submit" disabled={whoisXmlBusy}>{whoisXmlBusy ? 'Saving…' : 'Save Reverse WHOIS'}</Button>
         </div>
       </form>
 

@@ -16,6 +16,7 @@ public class SearchRunDto
     public int ErrorCount { get; init; }
     public string[] AppliedKeywords { get; init; } = [];
     public string[] Tags { get; init; } = [];
+    public bool EnableWebEnrichment { get; init; }
     public string? CreatedBy { get; init; }
     public DateTimeOffset Created { get; init; }
     public DateTimeOffset? StartedAt { get; init; }
@@ -42,6 +43,7 @@ public class SearchRunDto
         Tags = string.IsNullOrWhiteSpace(r.Tags)
             ? []
             : r.Tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries),
+        EnableWebEnrichment = r.EnableWebEnrichment,
         CreatedBy = r.CreatedBy,
         Created = r.Created,
         StartedAt = r.StartedAt,

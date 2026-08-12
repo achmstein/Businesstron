@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using Businesstron.Application.Common.Interfaces;
 using Businesstron.Infrastructure.ExternalClients.Asic;
 using Businesstron.Infrastructure.ExternalClients.Captcha;
+using Businesstron.Infrastructure.ExternalClients.WhoisXml;
 using Businesstron.Infrastructure.Ontraport;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
@@ -24,18 +25,21 @@ public sealed class SettingsService : ISettingsService
     private readonly IOptionsMonitor<OntraportOptions> _ontraport;
     private readonly IOptionsMonitor<TwoCaptchaOptions> _twoCaptcha;
     private readonly IOptionsMonitor<AsicOptions> _asic;
+    private readonly IOptionsMonitor<WhoisXmlOptions> _whoisXml;
     private readonly string _overridesPath;
 
     public SettingsService(
         IOptionsMonitor<OntraportOptions> ontraport,
         IOptionsMonitor<TwoCaptchaOptions> twoCaptcha,
         IOptionsMonitor<AsicOptions> asic,
+        IOptionsMonitor<WhoisXmlOptions> whoisXml,
         IConfiguration configuration,
         IHostEnvironment environment)
     {
         _ontraport = ontraport;
         _twoCaptcha = twoCaptcha;
         _asic = asic;
+        _whoisXml = whoisXml;
 
         // Match Program.cs: the writable overrides file lives outside the image.
         _overridesPath = configuration["Storage:OverridesPath"]
@@ -69,6 +73,14 @@ public sealed class SettingsService : ISettingsService
             credentials.DefaultTimeoutSeconds,
             credentials.RecaptchaTimeoutSeconds,
             credentials.PollingIntervalSeconds,
+        }, cancellationToken);
+
+    public WhoisXmlCredentials GetWhoisXmlCredentials() => new(_whoisXml.CurrentValue.ApiKey);
+
+    public Task UpdateWhoisXmlCredentialsAsync(WhoisXmlCredentials credentials, CancellationToken cancellationToken) =>
+        UpdateSectionAsync(WhoisXmlOptions.SectionName, new
+        {
+            ApiKey = credentials.ApiKey?.Trim(),
         }, cancellationToken);
 
     public AsicSettings GetAsicSettings()

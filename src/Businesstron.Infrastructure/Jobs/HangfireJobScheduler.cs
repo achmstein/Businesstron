@@ -14,4 +14,7 @@ public sealed class HangfireJobScheduler(IBackgroundJobClient jobs) : IJobSchedu
 
     public void EnqueueRetry(Guid searchRunId) =>
         jobs.Enqueue<ISearchProcessingService>(x => x.RetryFailedAsync(searchRunId, CancellationToken.None));
+
+    public void EnqueueWebEnrichment(Guid searchRunId) =>
+        jobs.Enqueue<IWebEnrichmentService>(x => x.ProcessAsync(searchRunId, CancellationToken.None));
 }

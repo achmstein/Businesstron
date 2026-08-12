@@ -26,6 +26,15 @@ public class BusinessNameRecordDto
     public string? OntraportError { get; init; }
     public DateTimeOffset? PushedAt { get; init; }
 
+    // --- Web enrichment ---
+    public string WebEnrichmentStatus { get; init; } = string.Empty;
+    public string? WebEnrichmentError { get; init; }
+    public string? Websites { get; init; }
+    public string? ContactEmail { get; init; }
+    public string? ContactEmails { get; init; }
+    public string? ContactPhone { get; init; }
+    public string? ContactSocials { get; init; }
+
     public static BusinessNameRecordDto FromEntity(BusinessNameRecord r) => new()
     {
         Id = r.Id,
@@ -50,6 +59,13 @@ public class BusinessNameRecordDto
         OntraportStatus = r.OntraportStatus.ToString(),
         OntraportContactId = r.OntraportContactId,
         OntraportError = r.OntraportError,
-        PushedAt = r.PushedAt
+        PushedAt = r.PushedAt,
+        WebEnrichmentStatus = r.WebEnrichmentStatus.ToString(),
+        WebEnrichmentError = r.WebEnrichmentError,
+        Websites = r.Websites,
+        ContactEmail = r.ContactEmail,
+        ContactEmails = r.ContactEmails,
+        ContactPhone = r.ContactPhone,
+        ContactSocials = r.ContactSocials
     };
 }

@@ -14,4 +14,7 @@ public interface IJobScheduler
 
     /// <summary>Enqueue a re-enrichment pass over a run's failed/pending records.</summary>
     void EnqueueRetry(Guid searchRunId);
+
+    /// <summary>Enqueue the web stage for a run: reverse-whois → auda email → contact.</summary>
+    void EnqueueWebEnrichment(Guid searchRunId);
 }

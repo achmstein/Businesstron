@@ -4,8 +4,11 @@ using Businesstron.Infrastructure.Data;
 using Businesstron.Infrastructure.Data.Interceptors;
 using Businesstron.Infrastructure.ExternalClients.Abr;
 using Businesstron.Infrastructure.ExternalClients.Asic;
+using Businesstron.Infrastructure.ExternalClients.Auda;
 using Businesstron.Infrastructure.ExternalClients.Captcha;
+using Businesstron.Infrastructure.ExternalClients.Contact;
 using Businesstron.Infrastructure.ExternalClients.DataGov;
+using Businesstron.Infrastructure.ExternalClients.WhoisXml;
 using Businesstron.Infrastructure.Identity;
 using Businesstron.Infrastructure.Jobs;
 using Businesstron.Infrastructure.Ontraport;
@@ -62,6 +65,9 @@ public static class DependencyInjection
         services.Configure<TwoCaptchaOptions>(configuration.GetSection(TwoCaptchaOptions.SectionName));
         services.Configure<DataGovOptions>(configuration.GetSection(DataGovOptions.SectionName));
         services.Configure<OntraportOptions>(configuration.GetSection(OntraportOptions.SectionName));
+        services.Configure<WhoisXmlOptions>(configuration.GetSection(WhoisXmlOptions.SectionName));
+        services.Configure<AudaOptions>(configuration.GetSection(AudaOptions.SectionName));
+        services.Configure<WebEnrichmentOptions>(configuration.GetSection(WebEnrichmentOptions.SectionName));
 
         // --- External clients ---
         services.AddSingleton<ICaptchaSolver, TwoCaptchaSolver>();
@@ -85,6 +91,19 @@ public static class DependencyInjection
 
         services.AddHttpClient<IOntraportClient, OntraportClient>();
 
+        // Web-enrichment stage clients. The WhoisXML client is a typed HttpClient; the auda
+        // client builds a fresh cookie-jar HttpClient per lookup, so it's a plain singleton.
+        services.AddHttpClient<IReverseWhoisClient, WhoisXmlReverseWhoisClient>((sp, http) =>
+        {
+            var options = sp.GetRequiredService<Microsoft.Extensions.Options.IOptions<WhoisXmlOptions>>().Value;
+            http.Timeout = TimeSpan.FromSeconds(options.TimeoutSeconds);
+        });
+        services.AddSingleton<IAudaClient, AudaClient>();
+
+        // Contact enrichment is a stub for now (IsConfigured == false, so the pipeline skips
+        // it). Replace this line with a real Google Places / AI-scrape implementation later.
+        services.AddSingleton<IContactEnricher, NoOpContactEnricher>();
+
         services.AddSingleton<ICsvExporter, CsvExporter>();
 
         // UI-editable integration credentials (persisted to the overrides file).
@@ -100,6 +119,7 @@ public static class DependencyInjection
         services.AddHangfireServer(options => options.WorkerCount = 3);
 
         services.AddScoped<ISearchProcessingService, SearchProcessingService>();
+        services.AddScoped<IWebEnrichmentService, WebEnrichmentService>();
         services.AddScoped<IJobScheduler, HangfireJobScheduler>();
 
         return services;

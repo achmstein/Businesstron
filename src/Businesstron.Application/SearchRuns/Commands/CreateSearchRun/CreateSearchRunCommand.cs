@@ -19,6 +19,13 @@ public record CreateSearchRunCommand : IRequest<Guid>
 
     /// <summary>Optional labels to differentiate this run in the list.</summary>
     public IReadOnlyList<string>? Tags { get; init; }
+
+    /// <summary>
+    /// Opt in to the web stage: after ASIC/ABR enrichment, reverse-whois → auda email →
+    /// contact for suitable records renewing within the lead window. Costs whois + CAPTCHA
+    /// credits, so it's off unless the user asks for it.
+    /// </summary>
+    public bool EnableWebEnrichment { get; init; }
 }
 
 public class CreateSearchRunCommandHandler(IApplicationDbContext context, IJobScheduler jobs, IUser user)
@@ -44,6 +51,7 @@ public class CreateSearchRunCommandHandler(IApplicationDbContext context, IJobSc
             AbnListRaw = request.AbnListRaw,
             AppliedKeywords = appliedKeywords is { Count: > 0 } ? string.Join(",", appliedKeywords) : null,
             Tags = tags is { Count: > 0 } ? string.Join(",", tags) : null,
+            EnableWebEnrichment = request.EnableWebEnrichment,
             Status = SearchRunStatus.Pending,
             CreatedBy = user.Email ?? user.Id
         };

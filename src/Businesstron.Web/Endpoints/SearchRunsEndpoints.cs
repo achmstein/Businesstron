@@ -3,6 +3,7 @@ using Businesstron.Application.SearchRuns.Commands.CreateSearchRun;
 using Businesstron.Application.SearchRuns.Commands.DeleteSearchRun;
 using Businesstron.Application.SearchRuns.Commands.PushRunToOntraport;
 using Businesstron.Application.SearchRuns.Commands.RetryFailedEnrichment;
+using Businesstron.Application.SearchRuns.Commands.RunWebEnrichment;
 using Businesstron.Application.SearchRuns.Commands.UpdateSearchRunTags;
 using Businesstron.Application.SearchRuns.Queries.ExportSearchRunCsv;
 using Businesstron.Application.SearchRuns.Queries.GetSearchRun;
@@ -63,6 +64,14 @@ public static class SearchRunsEndpoints
         group.MapPost("/{id:guid}/retry", async (Guid id, ISender sender) =>
         {
             await sender.Send(new RetryFailedEnrichmentCommand(id));
+            return Results.Accepted();
+        });
+
+        // Find websites & contacts: reverse-whois → auda email → contact, for suitable
+        // records renewing within the lead window.
+        group.MapPost("/{id:guid}/enrich-web", async (Guid id, ISender sender) =>
+        {
+            await sender.Send(new RunWebEnrichmentCommand(id));
             return Results.Accepted();
         });
 

@@ -22,6 +22,7 @@ public sealed class SearchProcessingService(
     IAbrClient abr,
     IDataGovClient dataGov,
     IOntraportClient ontraport,
+    IJobScheduler jobs,
     IOptionsMonitor<AsicOptions> asicOptions,
     ILogger<SearchProcessingService> logger) : ISearchProcessingService
 {
@@ -99,7 +100,7 @@ public sealed class SearchProcessingService(
             await RecomputeCountersAsync(run, cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
 
-            await AutoPushIfEnabledAsync(run, cancellationToken);
+            await ContinueAfterEnrichmentAsync(run, cancellationToken);
         }
         // The server is shutting down (deploy/restart) — rethrow so Hangfire re-queues
         // the job instead of marking the run Failed. On restart the idempotency guard
@@ -485,7 +486,7 @@ public sealed class SearchProcessingService(
             await RecomputeCountersAsync(run, cancellationToken);
             await db.SaveChangesAsync(cancellationToken);
 
-            await AutoPushIfEnabledAsync(run, cancellationToken);
+            await ContinueAfterEnrichmentAsync(run, cancellationToken);
         }
         // Shutdown mid-retry: same as ProcessAsync — let Hangfire re-queue and resume.
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
@@ -530,6 +531,23 @@ public sealed class SearchProcessingService(
             r => r.SearchRunId == run.Id && r.EnrichmentStatus == EnrichmentStatus.Failed, cancellationToken);
     }
 
+    /// <summary>
+    /// What happens once ASIC/ABR enrichment finishes. When the run opted into the web
+    /// stage, hand off to the (separate, durable) web-enrichment job — it auto-pushes
+    /// itself at the end, so the discovered contact email rides along to Ontraport.
+    /// Otherwise push straight away, as before.
+    /// </summary>
+    private async Task ContinueAfterEnrichmentAsync(SearchRun run, CancellationToken cancellationToken)
+    {
+        if (run.EnableWebEnrichment)
+        {
+            jobs.EnqueueWebEnrichment(run.Id);
+            return;
+        }
+
+        await AutoPushIfEnabledAsync(run, cancellationToken);
+    }
+
     private async Task AutoPushIfEnabledAsync(SearchRun run, CancellationToken cancellationToken)
     {
         var config = await db.OntraportConfigurations.FirstOrDefaultAsync(cancellationToken);
@@ -561,7 +579,8 @@ public sealed class SearchProcessingService(
                 var contact = await ontraport.UpsertContactAsync(
                     new OntraportContactInput(
                         record.BusinessName, record.HolderName, record.HolderAbn,
-                        record.AddressForServiceDocuments ?? record.PrincipalPlaceOfBusiness, Email: null),
+                        record.AddressForServiceDocuments ?? record.PrincipalPlaceOfBusiness,
+                        Email: record.ContactEmail),
                     cancellationToken);
 
                 if (contact.Succeeded && contact.ContactId is not null)
