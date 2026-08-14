@@ -634,5 +634,18 @@ public sealed class SearchProcessingService(
         string.IsNullOrWhiteSpace(raw)
             ? []
             : raw.Split(['\n', '\r', ','], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                 .Select(NormalizeAbn)
+                 .Where(abn => abn.Length > 0)
                  .Distinct().ToList();
+
+    /// <summary>
+    /// Reduce a pasted ABN entry to its digits. People paste them formatted —
+    /// "23 967 785 990", "23-967-785-990", a spreadsheet cell with tabs, even an
+    /// "ABN:" label — but ASIC's search matches only the bare number, so a
+    /// space-formatted ABN silently returns no business names. Stripping to digits
+    /// makes every reasonable paste work; a non-numeric entry collapses to empty and
+    /// is dropped by the caller.
+    /// </summary>
+    private static string NormalizeAbn(string entry) =>
+        new(entry.Where(char.IsDigit).ToArray());
 }
