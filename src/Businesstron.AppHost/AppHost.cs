@@ -34,6 +34,9 @@ builder.AddDockerComposeEnvironment("businesstron-compose")
 
 var pgPassword = builder.AddParameter("postgres-password", secret: true);
 
+// Empty = API-key auth not enforced (see Security:ApiKey appsettings).
+var securityApiKey = builder.AddParameter("security-api-key", secret: true, value: "");
+
 var postgres = builder.AddPostgres("postgres", password: pgPassword)
     .WithDataVolume("businesstron-pg-data")
     .WithLifetime(ContainerLifetime.Persistent)
@@ -50,6 +53,7 @@ var server = builder.AddProject<Projects.Businesstron_Web>("businesstron-server"
     // written to the overrides file on the persistent /data volume (below) — no
     // longer injected as build/deploy secrets.
     .WithEnvironment("Storage__OverridesPath", "/data/settings.overrides.json")
+    .WithEnvironment("Security__ApiKey", securityApiKey)
     .WithHttpHealthCheck("/health")
     .PublishAsDockerFile()
     .PublishAsDockerComposeService((_, service) =>

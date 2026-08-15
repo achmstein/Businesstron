@@ -16,6 +16,8 @@ using Businesstron.Infrastructure.Services;
 using Businesstron.Infrastructure.Settings;
 using Hangfire;
 using Hangfire.PostgreSql;
+using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
@@ -48,9 +50,17 @@ public static class DependencyInjection
         // --- Identity (cookie auth + minimal API endpoints) ---
         services
             .AddAuthentication(IdentityConstants.ApplicationScheme)
+            .AddScheme<AuthenticationSchemeOptions, ApiKeyAuthenticationHandler>(ApiKeyAuthenticationHandler.SchemeName, null)
             .AddIdentityCookies();
 
-        services.AddAuthorization();
+        // Default policy tries the SPA's identity cookie and the machine API key, so
+        // every RequireAuthorization() endpoint accepts either. The cookie remains the
+        // default authenticate scheme, so HttpContext.User (Hangfire dashboard, SPA
+        // login flow) is populated exactly as before.
+        services.AddAuthorization(options => options.DefaultPolicy =
+            new AuthorizationPolicyBuilder(IdentityConstants.ApplicationScheme, ApiKeyAuthenticationHandler.SchemeName)
+                .RequireAuthenticatedUser()
+                .Build());
 
         services.AddIdentityCore<ApplicationUser>(options => options.SignIn.RequireConfirmedAccount = false)
             .AddEntityFrameworkStores<ApplicationDbContext>()
@@ -61,6 +71,7 @@ public static class DependencyInjection
         services.AddSingleton<IEmailSender<ApplicationUser>, NoOpEmailSender>();
 
         // --- Options ---
+        services.Configure<SecurityOptions>(configuration.GetSection(SecurityOptions.SectionName));
         services.Configure<AsicOptions>(configuration.GetSection(AsicOptions.SectionName));
         services.Configure<TwoCaptchaOptions>(configuration.GetSection(TwoCaptchaOptions.SectionName));
         services.Configure<DataGovOptions>(configuration.GetSection(DataGovOptions.SectionName));

@@ -86,6 +86,7 @@ jobs:
           cat > publish/.env <<EOF
           BUSINESSTRON_SERVER_IMAGE=${{ env.REGISTRY }}/${{ env.IMAGE_NAMESPACE }}/businesstron-server:${{ needs.build-and-push.outputs.image_tag }}
           POSTGRES_PASSWORD=${{ secrets.POSTGRES_PASSWORD }}
+          SECURITY_API_KEY=${{ secrets.SECURITY_API_KEY }}
           EOF
 
       - uses: actions/upload-artifact@v4
