@@ -1,14 +1,14 @@
 import { motion } from 'framer-motion'
-import { Check, Loader2, Database, Search, Filter, Send } from 'lucide-react'
+import { Check, Loader2, Database, Search, Filter, Send, Globe } from 'lucide-react'
 import type { LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { SearchRunDto } from '@/api/client'
+import type { SearchRunDto, WebEnrichmentSummary } from '@/api/client'
 
 type StageState = 'done' | 'active' | 'ready' | 'pending' | 'failed'
 
 interface Stage { key: string; label: string; detail: string; icon: LucideIcon; state: StageState }
 
-function computeStages(run: SearchRunDto): Stage[] {
+function computeStages(run: SearchRunDto, web?: WebEnrichmentSummary): Stage[] {
   const running = run.status === 'Running'
   const completed = run.status === 'Completed'
   const failed = run.status === 'Failed'
@@ -18,7 +18,7 @@ function computeStages(run: SearchRunDto): Stage[] {
   const enrichActive = running && run.totalItems > 0 && run.processedItems < run.totalItems
   const enriched = completed || (run.totalItems > 0 && run.processedItems >= run.totalItems)
 
-  return [
+  const stages: Stage[] = [
     {
       key: 'harvest', label: 'Harvest', icon: Database,
       detail: run.totalItems > 0 || started ? `${run.totalItems} names` : 'fetching…',
@@ -34,12 +34,31 @@ function computeStages(run: SearchRunDto): Stage[] {
       detail: `${run.suitableCount} suitable`,
       state: enriched ? 'done' : enrichActive ? 'active' : 'pending',
     },
-    {
-      key: 'ontraport', label: 'Ontraport', icon: Send,
-      detail: run.pushedCount > 0 ? `${run.pushedCount} pushed` : enriched ? 'ready' : 'waiting',
-      state: run.pushedCount > 0 ? 'done' : completed ? 'ready' : 'pending',
-    },
   ]
+
+  // The optional web stage only appears for runs that opted in. It sits between the
+  // filter and the Ontraport push (emails are found before the contacts are pushed).
+  if (run.enableWebEnrichment && web) {
+    const webActive = web.running
+    const webDone = web.eligible > 0 && web.processed >= web.eligible
+    stages.push({
+      key: 'web', label: 'Websites', icon: Globe,
+      detail: web.running
+        ? `${web.processed}/${web.eligible}`
+        : web.withEmail > 0
+          ? `${web.withEmail} emails`
+          : web.eligible > 0 ? 'done' : 'ready',
+      state: webActive ? 'active' : webDone ? 'done' : web.failed > 0 ? 'failed' : 'pending',
+    })
+  }
+
+  stages.push({
+    key: 'ontraport', label: 'Ontraport', icon: Send,
+    detail: run.pushedCount > 0 ? `${run.pushedCount} pushed` : enriched ? 'ready' : 'waiting',
+    state: run.pushedCount > 0 ? 'done' : completed ? 'ready' : 'pending',
+  })
+
+  return stages
 }
 
 // Bright -300 text works on the near-black theme but is unreadable on light, so
@@ -60,32 +79,32 @@ const iconWrap: Record<StageState, string> = {
   failed: 'bg-red-500 text-white',
 }
 
-export default function PipelineMonitor({ run }: { run: SearchRunDto }) {
-  const stages = computeStages(run)
-  // 2×2 grid on phones (a scrolling row would show a scrollbar under the cards),
-  // single connected row from `sm` up.
+export default function PipelineMonitor({ run, web }: { run: SearchRunDto; web?: WebEnrichmentSummary }) {
+  const stages = computeStages(run, web)
+  // Responsive so up to 5 stages always fit: 2-col grid on phones, 3-col on tablets,
+  // a single connected row only from `lg` up (where 5 cards + connectors have room).
   return (
-    <div className="grid grid-cols-2 gap-2 sm:flex sm:items-stretch">
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:flex lg:items-stretch">
       {stages.map((stage, i) => {
         const Icon = stage.icon
         return (
-          <div key={stage.key} className="flex items-center gap-2 sm:flex-1">
+          <div key={stage.key} className="flex items-center gap-2 lg:flex-1">
             <motion.div
               layout
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.05 }}
-              className={cn('flex min-w-0 flex-1 items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors sm:min-w-[9.5rem]', ring[stage.state])}
+              className={cn('flex min-w-0 flex-1 items-center gap-3 rounded-lg border px-3 py-2.5 transition-colors lg:min-w-[7.5rem]', ring[stage.state])}
             >
               <div className={cn('flex size-8 shrink-0 items-center justify-center rounded-md', iconWrap[stage.state])}>
                 {stage.state === 'active' ? <Loader2 className="size-4 animate-spin" /> : stage.state === 'done' ? <Check className="size-4" /> : <Icon className="size-4" />}
               </div>
               <div className="min-w-0">
-                <div className="text-xs font-semibold uppercase tracking-wide">{stage.label}</div>
-                <div className="font-mono text-xs tabular-nums opacity-80">{stage.detail}</div>
+                <div className="truncate text-xs font-semibold uppercase tracking-wide">{stage.label}</div>
+                <div className="truncate font-mono text-xs tabular-nums opacity-80">{stage.detail}</div>
               </div>
             </motion.div>
-            {i < stages.length - 1 && <div className={cn('hidden h-px w-4 shrink-0 sm:block', stage.state === 'done' ? 'bg-emerald-400/60' : 'bg-border')} />}
+            {i < stages.length - 1 && <div className={cn('hidden h-px w-4 shrink-0 lg:block', stage.state === 'done' ? 'bg-emerald-400/60' : 'bg-border')} />}
           </div>
         )
       })}

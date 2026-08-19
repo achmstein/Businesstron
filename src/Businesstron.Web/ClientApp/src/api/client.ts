@@ -29,7 +29,15 @@ export async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> 
 export interface MeResponse { email: string; name: string }
 
 export type SearchSource = 'DataGov' | 'AbnList'
-export type RecordFilter = 'errors' | 'suitable' | 'pushed'
+export type RecordFilter =
+  | 'errors'
+  | 'suitable'
+  | 'pushed'
+  | 'websites'
+  | 'emails'
+  | 'webpending'
+  | 'webfailed'
+  | 'nowebsite'
 export type SearchRunStatus = 'Pending' | 'Running' | 'Completed' | 'Failed' | 'Cancelled'
 
 export interface SearchRunDto {
@@ -53,6 +61,8 @@ export interface SearchRunDto {
   startedAt: string | null
   completedAt: string | null
   error: string | null
+  webEmailCount: number | null
+  webPendingCount: number | null
 }
 
 export type WebEnrichmentStatus =
@@ -100,6 +110,22 @@ export interface BusinessNameRecordDto {
   contactSocials: string | null
 }
 
+export interface WebEnrichmentSummary {
+  notAttempted: number
+  pending: number
+  skipped: number
+  noWebsite: number
+  noEmail: number
+  enriched: number
+  failed: number
+  withWebsite: number
+  withEmail: number
+  eligible: number
+  processed: number
+  running: boolean
+  hasActivity: boolean
+}
+
 export interface SearchRunDetail {
   run: SearchRunDto
   records: BusinessNameRecordDto[]
@@ -109,6 +135,7 @@ export interface SearchRunDetail {
   recordsTotalPages: number
   pendingCount: number
   sampleFailureReason: string | null
+  web: WebEnrichmentSummary
 }
 
 export interface FilterKeywordDto { id: string; word: string; isActive: boolean }

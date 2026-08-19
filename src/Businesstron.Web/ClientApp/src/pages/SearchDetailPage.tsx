@@ -147,7 +147,7 @@ export default function SearchDetailPage() {
   if (error && !data) return <div className="rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-sm text-red-700 dark:text-red-300">{error}</div>
   if (!data) return <div className="text-sm text-muted-foreground">Loading…</div>
 
-  const { run, records } = data
+  const { run, records, web } = data
   // Failure summary comes from the server (run.errorCount + a sample reason) so it
   // reflects the whole run, not just the records on the current page.
   const failedCount = run.errorCount
@@ -168,6 +168,24 @@ export default function SearchDetailPage() {
     { label: 'Pushed', value: run.pushedCount, filter: 'pushed' },
     { label: 'Errors', value: run.errorCount, tone: run.errorCount > 0 ? 'text-red-700 dark:text-red-300' : undefined, filter: 'errors' },
   ]
+
+  // Web-enrichment tiles double as table filters, so the enriched rows — otherwise
+  // scattered across hundreds of pages — are one click away.
+  const webTiles: { label: string; value: number; tone?: string; filter: RecordFilter }[] = [
+    { label: 'Websites', value: web.withWebsite, filter: 'websites' },
+    { label: 'Emails', value: web.withEmail, tone: 'text-emerald-700 dark:text-emerald-300', filter: 'emails' },
+    { label: 'Queued', value: web.pending, filter: 'webpending' },
+    { label: 'No website', value: web.noWebsite, filter: 'nowebsite' },
+    { label: 'Failed', value: web.failed, tone: web.failed > 0 ? 'text-red-700 dark:text-red-300' : undefined, filter: 'webfailed' },
+  ]
+  const webPct = web.eligible > 0 ? Math.round((web.processed / web.eligible) * 100) : 0
+  const showWeb = run.enableWebEnrichment && web.hasActivity
+  // Friendly names for the active-filter hint (raw keys like "webpending" are ugly).
+  const filterLabels: Record<RecordFilter, string> = {
+    errors: 'errored', suitable: 'suitable', pushed: 'pushed',
+    websites: 'with a website', emails: 'with an email', webpending: 'queued for web enrichment',
+    webfailed: 'web-enrichment failed', nowebsite: 'with no website',
+  }
 
   return (
     <div>
@@ -261,7 +279,7 @@ export default function SearchDetailPage() {
       )}
 
       <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="mb-5 rounded-xl border bg-card p-4">
-        <PipelineMonitor run={run} />
+        <PipelineMonitor run={run} web={web} />
       </motion.div>
 
       {run.error && (
@@ -322,10 +340,75 @@ export default function SearchDetailPage() {
         )}
       </div>
 
+      {showWeb && (
+        <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="mb-6 rounded-xl border bg-card p-4">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <Globe className="size-4 text-muted-foreground" />
+              <h2 className="text-sm font-semibold">Web enrichment</h2>
+              {web.running ? (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-inset ring-primary/40 dark:text-primary">
+                  <span className="size-1.5 animate-pulse rounded-full bg-amber-600 dark:bg-primary" /> Running
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/30 dark:text-emerald-300">
+                  <span className="size-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400" /> {web.eligible > 0 ? 'Complete' : 'Idle'}
+                </span>
+              )}
+            </div>
+            <span className="font-mono text-xs tabular-nums text-muted-foreground">
+              {web.processed.toLocaleString()} / {web.eligible.toLocaleString()} processed
+              {web.running && ` · ${web.pending.toLocaleString()} queued`}
+            </span>
+          </div>
+
+          {web.eligible > 0 && (
+            <div className="mb-4">
+              <div className="h-2 w-full overflow-hidden rounded-full bg-muted">
+                <motion.div
+                  className="h-full rounded-full bg-primary"
+                  initial={{ width: 0 }}
+                  animate={{ width: `${webPct}%` }}
+                  transition={{ duration: 0.5 }}
+                />
+              </div>
+              <div className="mt-1 text-right font-mono text-[11px] tabular-nums text-muted-foreground">{webPct}%</div>
+            </div>
+          )}
+
+          <div className="grid grid-cols-2 gap-3 sm:grid-cols-5">
+            {webTiles.map((t) => (
+              <button
+                key={t.label}
+                type="button"
+                onClick={() => setFilter((f) => (f === t.filter ? null : t.filter))}
+                title={filter === t.filter ? 'Clear filter' : `Show only records ${filterLabels[t.filter]}`}
+                className={cn(
+                  'rounded-lg border bg-card px-4 py-3 text-left transition-colors hover:border-primary/40',
+                  filter === t.filter && 'border-primary/60 bg-primary/10 ring-1 ring-primary/30',
+                )}
+              >
+                <div className="flex items-center justify-between text-xs uppercase tracking-wide text-muted-foreground">
+                  {t.label}
+                  {filter === t.filter && <X className="size-3" />}
+                </div>
+                <div className={cn('mt-0.5 font-mono text-lg font-semibold tabular-nums', t.tone)}>{t.value.toLocaleString()}</div>
+              </button>
+            ))}
+          </div>
+
+          {web.skipped > 0 && (
+            <p className="mt-3 text-xs text-muted-foreground">
+              {web.skipped.toLocaleString()} record{web.skipped > 1 ? 's' : ''} skipped (renewal outside the lead window).
+            </p>
+          )}
+        </motion.div>
+      )}
+
       {filter && (
         <div className="mb-3 flex items-center gap-2 text-xs text-muted-foreground">
           <span>
-            Showing only <span className="font-medium text-foreground">{filter}</span> records
+            Showing only records <span className="font-medium text-foreground">{filterLabels[filter]}</span>
           </span>
           <button type="button" className="rounded-md border px-1.5 py-0.5 font-medium transition-colors hover:bg-secondary hover:text-foreground" onClick={() => setFilter(null)}>
             Clear filter
@@ -333,7 +416,7 @@ export default function SearchDetailPage() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-xl border bg-card">
+      <div className="overflow-x-auto rounded-xl border bg-card">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -364,8 +447,9 @@ export default function SearchDetailPage() {
             {records.map((r) => {
               const pending = r.enrichmentStatus === 'Pending'
               const websites = r.websites ? r.websites.split(',').filter(Boolean) : []
+              const webEnriched = r.webEnrichmentStatus === 'Enriched'
               return (
-                <TableRow key={r.id} className={cn(!r.isSuitable && !pending && 'bg-amber-500/5', pending && 'opacity-60')}>
+                <TableRow key={r.id} className={cn(!r.isSuitable && !pending && 'bg-amber-500/5', webEnriched && 'bg-emerald-500/5', pending && 'opacity-60')}>
                   <TableCell className="max-w-[16rem] truncate font-medium" title={r.businessName ?? undefined}>{r.businessName || <span className="text-muted-foreground">—</span>}</TableCell>
                   <TableCell className="max-w-[14rem] truncate text-muted-foreground" title={r.holderName ?? undefined}>{r.holderName || '—'}</TableCell>
                   <TableCell className="font-mono text-xs tabular-nums">{r.holderAbn}</TableCell>
@@ -406,6 +490,9 @@ export default function SearchDetailPage() {
                         </div>
                       )}
                       {r.contactPhone && <div className="text-muted-foreground">{r.contactPhone}</div>}
+                      {r.contactSocials && (
+                        <div className="truncate text-muted-foreground" title={r.contactSocials}>{r.contactSocials}</div>
+                      )}
                       {!r.contactEmail && websites.length === 0 && (
                         r.webEnrichmentError ? (
                           <Tooltip>

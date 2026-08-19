@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { motion } from 'framer-motion'
-import { Plus, ScanSearch, Trash2 } from 'lucide-react'
+import { Plus, ScanSearch, Trash2, Globe, Loader2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { api, type SearchRunDto } from '../api/client'
 import { useUi } from '../context/ui'
@@ -58,6 +58,7 @@ export default function SearchesPage() {
     () => ({
       suitable: runs.reduce((s, r) => s + r.suitableCount, 0),
       pushed: runs.reduce((s, r) => s + r.pushedCount, 0),
+      emails: runs.reduce((s, r) => s + (r.webEmailCount ?? 0), 0),
       running: runs.filter((r) => r.status === 'Running').length,
     }),
     [runs],
@@ -73,10 +74,11 @@ export default function SearchesPage() {
         <Button onClick={openNewSearch}><Plus className="size-4" /> New search</Button>
       </div>
 
-      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+      <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {[
           { label: 'Runs', value: runs.length },
           { label: 'Suitable', value: totals.suitable, tone: 'text-emerald-700 dark:text-emerald-300' },
+          { label: 'Emails', value: totals.emails, tone: 'text-emerald-700 dark:text-emerald-300' },
           { label: 'Pushed', value: totals.pushed },
         ].map((s) => (
           <div key={s.label} className="rounded-xl border bg-card px-4 py-3">
@@ -95,7 +97,7 @@ export default function SearchesPage() {
         </div>
       </div>
 
-      <div className="overflow-hidden rounded-xl border bg-card">
+      <div className="overflow-x-auto rounded-xl border bg-card">
         <Table>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
@@ -105,6 +107,7 @@ export default function SearchesPage() {
               <TableHead>Progress</TableHead>
               <TableHead className="text-right">Found</TableHead>
               <TableHead className="text-right">Suitable</TableHead>
+              <TableHead className="hidden text-right sm:table-cell">Emails</TableHead>
               <TableHead className="text-right">Pushed</TableHead>
               <TableHead />
             </TableRow>
@@ -112,12 +115,12 @@ export default function SearchesPage() {
           <TableBody>
             {loading && runs.length === 0 &&
               Array.from({ length: 4 }).map((_, i) => (
-                <TableRow key={i}><TableCell colSpan={8}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
+                <TableRow key={i}><TableCell colSpan={9}><Skeleton className="h-5 w-full" /></TableCell></TableRow>
               ))}
 
             {!loading && runs.length === 0 && (
               <TableRow className="hover:bg-transparent">
-                <TableCell colSpan={8}>
+                <TableCell colSpan={9}>
                   <div className="flex flex-col items-center gap-3 py-14 text-center">
                     <div className="flex size-11 items-center justify-center rounded-full bg-muted text-muted-foreground"><ScanSearch className="size-5" /></div>
                     <div className="text-sm text-muted-foreground">No searches yet. Start one to harvest new business names.</div>
@@ -148,10 +151,28 @@ export default function SearchesPage() {
                     )}
                   </div>
                 </TableCell>
-                <TableCell><StatusBadge status={run.status} /></TableCell>
+                <TableCell>
+                  <div className="flex items-center gap-1.5">
+                    <StatusBadge status={run.status} />
+                    {(run.webPendingCount ?? 0) > 0 && (
+                      <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground" title={`Enriching — ${run.webPendingCount} queued`}>
+                        <Loader2 className="size-3 animate-spin" /> web
+                      </span>
+                    )}
+                  </div>
+                </TableCell>
                 <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">{run.processedItems}/{run.totalItems}</TableCell>
                 <TableCell className="text-right font-mono tabular-nums">{run.foundRecords}</TableCell>
                 <TableCell className="text-right font-mono tabular-nums text-emerald-700 dark:text-emerald-300">{run.suitableCount}</TableCell>
+                <TableCell className="hidden text-right font-mono tabular-nums sm:table-cell">
+                  {run.webEmailCount != null && run.webEmailCount > 0 ? (
+                    <span className="inline-flex items-center justify-end gap-1 text-emerald-700 dark:text-emerald-300">
+                      <Globe className="size-3 opacity-70" /> {run.webEmailCount.toLocaleString()}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">—</span>
+                  )}
+                </TableCell>
                 <TableCell className="text-right font-mono tabular-nums">{run.pushedCount}</TableCell>
                 <TableCell className="text-right">
                   <div className="flex items-center justify-end gap-1">

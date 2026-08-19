@@ -23,7 +23,13 @@ public class SearchRunDto
     public DateTimeOffset? CompletedAt { get; init; }
     public string? Error { get; init; }
 
-    public static SearchRunDto FromEntity(SearchRun r) => new()
+    /// <summary>Records with a contact email (list view only; null when not aggregated).</summary>
+    public int? WebEmailCount { get; init; }
+
+    /// <summary>Records still queued for the web stage — &gt; 0 means it is running (list view only).</summary>
+    public int? WebPendingCount { get; init; }
+
+    public static SearchRunDto FromEntity(SearchRun r, int? webEmailCount = null, int? webPendingCount = null) => new()
     {
         Id = r.Id,
         Source = r.Source.ToString(),
@@ -48,6 +54,8 @@ public class SearchRunDto
         Created = r.Created,
         StartedAt = r.StartedAt,
         CompletedAt = r.CompletedAt,
-        Error = r.Error
+        Error = r.Error,
+        WebEmailCount = webEmailCount,
+        WebPendingCount = webPendingCount
     };
 }
