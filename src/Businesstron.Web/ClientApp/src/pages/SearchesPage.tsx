@@ -153,10 +153,10 @@ export default function SearchesPage() {
                 </TableCell>
                 <TableCell>
                   <div className="flex items-center gap-1.5">
-                    <StatusBadge status={run.status} />
-                    {(run.webPendingCount ?? 0) > 0 && (
+                    <StatusBadge status={run.overallStatus} />
+                    {run.webEnrichmentState === 'Running' && (run.webPendingCount ?? 0) > 0 && (
                       <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground" title={`Enriching — ${run.webPendingCount} queued`}>
-                        <Loader2 className="size-3 animate-spin" /> web
+                        <Loader2 className="size-3 animate-spin" />
                       </span>
                     )}
                   </div>

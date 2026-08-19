@@ -118,6 +118,20 @@ export default function SearchDetailPage() {
     }
   }
 
+  const stopWeb = async () => {
+    if (!id) return
+    setWebBusy(true)
+    try {
+      await api.searchRuns.stopWebEnrichment(id)
+      toast.success('Stopping web enrichment…', { description: 'It halts after the current batch; re-run any time to continue.' })
+      await load()
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Failed to stop web enrichment')
+    } finally {
+      setWebBusy(false)
+    }
+  }
+
   const remove = async () => {
     if (!id) return
     try {
@@ -180,6 +194,13 @@ export default function SearchDetailPage() {
   ]
   const webPct = web.eligible > 0 ? Math.round((web.processed / web.eligible) * 100) : 0
   const showWeb = run.enableWebEnrichment && web.hasActivity
+  // Badge shown in the web card when no worker is live (idle/complete/stopped/failed).
+  const webCardStatus =
+    web.state === 'Completed' ? 'Completed'
+      : web.state === 'Cancelled' ? 'WebStopped'
+      : web.state === 'Failed' ? 'WebFailed'
+      : web.state === 'Queued' ? 'WebQueued'
+      : web.processed > 0 ? 'Completed' : 'Pending'
   // Friendly names for the active-filter hint (raw keys like "webpending" are ugly).
   const filterLabels: Record<RecordFilter, string> = {
     errors: 'errored', suitable: 'suitable', pushed: 'pushed',
@@ -196,7 +217,7 @@ export default function SearchDetailPage() {
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <h1 className="font-display text-2xl font-semibold tracking-tight">Run monitor</h1>
-          <StatusBadge status={run.status} />
+          <StatusBadge status={run.overallStatus} />
           <span className="font-mono text-xs text-muted-foreground">{run.source === 'DataGov' ? 'data.gov.au' : 'ABN list'}</span>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -216,16 +237,28 @@ export default function SearchDetailPage() {
               <RotateCcw className="size-4" /> Retry {retryable.toLocaleString()}
             </Button>
           )}
-          {run.status !== 'Running' && run.status !== 'Pending' && run.suitableCount > 0 && (
+          {web.active ? (
             <Button
-              variant="outline"
+              variant="destructive"
               size="sm"
-              onClick={enrichWeb}
-              disabled={webBusy}
-              title="Reverse-whois suitable leads renewing within 12 months, then look up a contact email"
+              onClick={stopWeb}
+              disabled={webBusy || web.stopping}
+              title="Stop the web-enrichment stage; remaining leads stay queued for a re-run"
             >
-              <Globe className="size-4" /> {webBusy ? 'Starting…' : run.enableWebEnrichment ? 'Re-run web enrichment' : 'Find websites & contacts'}
+              <Square className="size-4" /> {web.stopping ? 'Stopping web…' : 'Stop web enrichment'}
             </Button>
+          ) : (
+            run.status !== 'Running' && run.status !== 'Pending' && run.suitableCount > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={enrichWeb}
+                disabled={webBusy}
+                title="Reverse-whois suitable leads renewing within 12 months, then look up a contact email"
+              >
+                <Globe className="size-4" /> {webBusy ? 'Starting…' : run.enableWebEnrichment ? 'Re-run web enrichment' : 'Find websites & contacts'}
+              </Button>
+            )
           )}
           <Button asChild variant="outline" size="sm"><a href={api.searchRuns.exportHref(run.id, false)}><Download className="size-4" /> CSV</a></Button>
           <Button asChild variant="outline" size="sm"><a href={api.searchRuns.exportHref(run.id, true)}><Download className="size-4" /> Suitable</a></Button>
@@ -343,24 +376,44 @@ export default function SearchDetailPage() {
       {showWeb && (
         <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} className="mb-6 rounded-xl border bg-card p-4">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               <Globe className="size-4 text-muted-foreground" />
               <h2 className="text-sm font-semibold">Web enrichment</h2>
-              {web.running ? (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/15 px-2 py-0.5 text-xs font-medium text-amber-800 ring-1 ring-inset ring-primary/40 dark:text-primary">
-                  <span className="size-1.5 animate-pulse rounded-full bg-amber-600 dark:bg-primary" /> Running
+              {web.active ? (
+                <span className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset',
+                  web.stopping
+                    ? 'bg-amber-500/15 text-amber-800 ring-amber-600/30 dark:text-amber-300'
+                    : 'bg-primary/15 text-amber-800 ring-primary/40 dark:text-primary',
+                )}>
+                  <span className={cn('size-1.5 animate-pulse rounded-full', web.stopping ? 'bg-amber-600 dark:bg-amber-400' : 'bg-amber-600 dark:bg-primary')} />
+                  {web.stopping ? 'Stopping…' : 'Running'}
                 </span>
               ) : (
-                <span className="inline-flex items-center gap-1.5 rounded-full bg-emerald-500/15 px-2 py-0.5 text-xs font-medium text-emerald-700 ring-1 ring-inset ring-emerald-600/30 dark:text-emerald-300">
-                  <span className="size-1.5 rounded-full bg-emerald-600 dark:bg-emerald-400" /> {web.eligible > 0 ? 'Complete' : 'Idle'}
-                </span>
+                <StatusBadge status={webCardStatus} />
+              )}
+              {web.active && !web.stopping && (
+                <Button variant="destructive" size="sm" className="h-6 px-2" onClick={stopWeb} disabled={webBusy}>
+                  <Square className="size-3" /> Stop
+                </Button>
+              )}
+              {!web.active && web.state === 'Cancelled' && run.suitableCount > 0 && (
+                <Button variant="outline" size="sm" className="h-6 px-2" onClick={enrichWeb} disabled={webBusy}>
+                  <Globe className="size-3" /> Resume
+                </Button>
               )}
             </div>
             <span className="font-mono text-xs tabular-nums text-muted-foreground">
               {web.processed.toLocaleString()} / {web.eligible.toLocaleString()} processed
-              {web.running && ` · ${web.pending.toLocaleString()} queued`}
+              {web.active && ` · ${web.pending.toLocaleString()} queued`}
             </span>
           </div>
+
+          {web.state === 'Failed' && web.error && (
+            <div className="mb-3 flex items-start gap-2 rounded-md border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-red-700 dark:text-red-300">
+              <AlertTriangle className="mt-0.5 size-3.5 shrink-0" /> {web.error}
+            </div>
+          )}
 
           {web.eligible > 0 && (
             <div className="mb-4">

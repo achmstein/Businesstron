@@ -541,6 +541,13 @@ public sealed class SearchProcessingService(
     {
         if (run.EnableWebEnrichment)
         {
+            // Mark the web stage Queued so the run reads as still working (not "Completed")
+            // from the moment ASIC finishes — the badge only reaches Completed once the web
+            // job finishes. Clear any prior stop so an auto-run after a retry starts clean.
+            run.WebEnrichmentState = WebEnrichmentRunState.Queued;
+            run.WebEnrichmentCancellationRequested = false;
+            await db.SaveChangesAsync(cancellationToken);
+
             jobs.EnqueueWebEnrichment(run.Id);
             return;
         }

@@ -8,6 +8,18 @@ namespace Businesstron.Application.SearchRuns.Queries;
 /// </summary>
 public class WebEnrichmentSummaryDto
 {
+    /// <summary>Run-level lifecycle of the stage: NotRequested / Queued / Running / Completed / Cancelled / Failed.</summary>
+    public string State { get; init; } = nameof(Domain.Enums.WebEnrichmentRunState.NotRequested);
+
+    /// <summary>A worker is genuinely processing right now (Running with a recent heartbeat) — drives Stop vs Start.</summary>
+    public bool Active { get; init; }
+
+    /// <summary>A stop was requested and is being honoured (Active and cancellation pending).</summary>
+    public bool Stopping { get; init; }
+
+    /// <summary>Run-level web error (e.g. the failure breaker tripped), if the stage failed.</summary>
+    public string? Error { get; init; }
+
     /// <summary>Never reached (run finished before the web stage got to them, or it never ran).</summary>
     public int NotAttempted { get; init; }
 
@@ -41,9 +53,10 @@ public class WebEnrichmentSummaryDto
     /// <summary>Records the web stage has finished with (any terminal outcome).</summary>
     public int Processed => NoWebsite + NoEmail + Enriched + Failed;
 
-    /// <summary>True while records are still queued — the signal the stage is live.</summary>
+    /// <summary>True while records are still queued (outstanding work exists).</summary>
     public bool Running => Pending > 0;
 
     /// <summary>True when the run has any web-enrichment activity at all (so the UI can show the section).</summary>
-    public bool HasActivity => Eligible > 0 || Skipped > 0;
+    public bool HasActivity => Eligible > 0 || Skipped > 0
+        || State != nameof(Domain.Enums.WebEnrichmentRunState.NotRequested);
 }

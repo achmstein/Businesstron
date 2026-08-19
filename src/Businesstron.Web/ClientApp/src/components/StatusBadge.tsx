@@ -31,14 +31,28 @@ const toneFor: Record<string, Tone> = {
   Skipped: 'amber',
   Failed: 'red',
   Cancelled: 'slate',
+  // Stage-aware overall statuses shown while the web stage runs after ASIC.
+  WebQueued: 'gold',
+  EnrichingWeb: 'gold',
+  WebStopped: 'amber',
+  WebFailed: 'red',
 }
 
-const labelFor: Record<string, string> = { NotPushed: 'Not pushed' }
+const labelFor: Record<string, string> = {
+  NotPushed: 'Not pushed',
+  WebQueued: 'Web queued',
+  EnrichingWeb: 'Enriching web',
+  WebStopped: 'Web stopped',
+  WebFailed: 'Web failed',
+}
+
+// Statuses that represent live work — their dot pulses.
+const activeStatuses = new Set(['Running', 'EnrichingWeb', 'WebQueued'])
 
 export default function StatusBadge({ status, pulse }: { status: string; pulse?: boolean }) {
   const tone = toneFor[status] ?? 'slate'
   const label = labelFor[status] ?? status
-  const animate = pulse ?? status === 'Running'
+  const animate = pulse ?? activeStatuses.has(status)
   return (
     <span className={cn('inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset', toneClass[tone])}>
       <span className={cn('size-1.5 rounded-full', dotClass[tone], animate && 'animate-pulse')} />

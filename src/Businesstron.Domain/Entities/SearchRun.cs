@@ -33,6 +33,20 @@ public class SearchRun : BaseAuditableEntity
     /// </summary>
     public bool EnableWebEnrichment { get; set; }
 
+    // --- Web-enrichment stage lifecycle (run level; per-record state lives on the records) ---
+
+    /// <summary>Where the web-enrichment stage sits for this run — drives the stage-aware badge and Stop/Start.</summary>
+    public WebEnrichmentRunState WebEnrichmentState { get; set; } = WebEnrichmentRunState.NotRequested;
+
+    /// <summary>Cooperative stop for the web stage only (separate from the ASIC <see cref="CancellationRequested"/>).</summary>
+    public bool WebEnrichmentCancellationRequested { get; set; }
+
+    /// <summary>Last time a web-enrichment worker made progress; a stale value means the job died and can be re-run.</summary>
+    public DateTimeOffset? WebEnrichmentHeartbeat { get; set; }
+
+    /// <summary>Why the web stage failed for the run as a whole (e.g. the failure breaker tripped), if it did.</summary>
+    public string? WebEnrichmentError { get; set; }
+
     public SearchRunStatus Status { get; set; } = SearchRunStatus.Pending;
 
     /// <summary>Set by the user to stop a running search; the processor checks this cooperatively.</summary>

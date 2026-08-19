@@ -58,6 +58,35 @@ public sealed class WebEnrichmentService(
         var opts = options.CurrentValue;
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
 
+        // Atomic duplicate-job guard. Hangfire can reclaim an interrupted job (after its
+        // invisibility timeout) while a fresh one is already live — or reclaim two orphans
+        // at once — and double-processing means double CAPTCHA spend and racing writes. A
+        // single conditional UPDATE flips the run to Running only when no live worker holds
+        // it (not Running, or Running with a stale heartbeat), so exactly one job wins the
+        // race; the loser sees zero rows updated and bails. Leaving the cancellation flag
+        // untouched means a Stop issued between enqueue and pick-up is still honoured.
+        var stale = DateTimeOffset.UtcNow.AddMinutes(-5);
+        var claimed = await db.SearchRuns
+            .Where(r => r.Id == searchRunId
+                && (r.WebEnrichmentState != WebEnrichmentRunState.Running
+                    || r.WebEnrichmentHeartbeat == null
+                    || r.WebEnrichmentHeartbeat < stale))
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(r => r.WebEnrichmentState, WebEnrichmentRunState.Running)
+                .SetProperty(r => r.WebEnrichmentHeartbeat, DateTimeOffset.UtcNow)
+                .SetProperty(r => r.WebEnrichmentError, (string?)null),
+                cancellationToken);
+        if (claimed == 0)
+        {
+            logger.LogWarning("Web enrichment for run {RunId} is already in progress; skipping duplicate job.", searchRunId);
+            return;
+        }
+
+        // Keep the tracked entity in step with the claim so later batch saves don't revert it.
+        run.WebEnrichmentState = WebEnrichmentRunState.Running;
+        run.WebEnrichmentHeartbeat = DateTimeOffset.UtcNow;
+        run.WebEnrichmentError = null;
+
         try
         {
             // Candidates: suitable, ASIC-enriched, with an ABN to search, not already in a
@@ -97,6 +126,26 @@ public sealed class WebEnrichmentService(
 
             await EnrichAllAsync(run, eligible, opts, cancellationToken);
 
+            // Terminal state via a direct update (not the tracked entity): the Stop command
+            // writes the cancellation flag from a different DbContext, so re-read it fresh
+            // and, when set, clear it in the same statement — otherwise the stale tracked
+            // value would neither be detected nor reset.
+            if (await IsCancelledAsync(run.Id, cancellationToken))
+            {
+                await db.SearchRuns.Where(r => r.Id == run.Id).ExecuteUpdateAsync(s => s
+                    .SetProperty(r => r.WebEnrichmentState, WebEnrichmentRunState.Cancelled)
+                    .SetProperty(r => r.WebEnrichmentCancellationRequested, false)
+                    .SetProperty(r => r.WebEnrichmentHeartbeat, (DateTimeOffset?)null),
+                    cancellationToken);
+                logger.LogInformation("Web enrichment for run {RunId} stopped by user.", searchRunId);
+                return;
+            }
+
+            await db.SearchRuns.Where(r => r.Id == run.Id).ExecuteUpdateAsync(s => s
+                .SetProperty(r => r.WebEnrichmentState, WebEnrichmentRunState.Completed)
+                .SetProperty(r => r.WebEnrichmentHeartbeat, (DateTimeOffset?)null),
+                cancellationToken);
+
             // Now that contact emails are populated, push to Ontraport if the run's config
             // opts in — deferred here (rather than at ASIC-completion) so the email rides along.
             var config = await db.OntraportConfigurations.FirstOrDefaultAsync(cancellationToken);
@@ -105,8 +154,8 @@ public sealed class WebEnrichmentService(
                 jobs.EnqueuePush(run.Id);
             }
         }
-        // Shutdown (deploy/restart): let Hangfire re-queue; the resume filter above picks
-        // up the records still outstanding.
+        // Shutdown (deploy/restart): stay Running with a now-stale heartbeat; let Hangfire
+        // re-queue. The resume filter above picks up the records still outstanding.
         catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
             logger.LogInformation("Web enrichment for run {RunId} interrupted by shutdown; will resume.", searchRunId);
@@ -115,6 +164,11 @@ public sealed class WebEnrichmentService(
         catch (Exception ex)
         {
             logger.LogError(ex, "Web enrichment for run {RunId} failed.", searchRunId);
+            await db.SearchRuns.Where(r => r.Id == searchRunId).ExecuteUpdateAsync(s => s
+                .SetProperty(r => r.WebEnrichmentState, WebEnrichmentRunState.Failed)
+                .SetProperty(r => r.WebEnrichmentError, ex.Message)
+                .SetProperty(r => r.WebEnrichmentHeartbeat, (DateTimeOffset?)null),
+                CancellationToken.None);
         }
     }
 
@@ -172,6 +226,9 @@ public sealed class WebEnrichmentService(
 
                 if (++applied % SaveBatchSize == 0)
                 {
+                    // Stamp progress so a watching UI (and the stuck-job check) can tell this
+                    // job is alive; persisted in the same batch as the record updates.
+                    run.WebEnrichmentHeartbeat = DateTimeOffset.UtcNow;
                     await db.SaveChangesAsync(cancellationToken);
                     if (await IsCancelledAsync(run.Id, cancellationToken))
                     {
@@ -296,6 +353,6 @@ public sealed class WebEnrichmentService(
 
     private async Task<bool> IsCancelledAsync(Guid runId, CancellationToken cancellationToken) =>
         await db.SearchRuns.AsNoTracking()
-            .Where(r => r.Id == runId).Select(r => r.CancellationRequested)
+            .Where(r => r.Id == runId).Select(r => r.WebEnrichmentCancellationRequested)
             .FirstOrDefaultAsync(cancellationToken);
 }

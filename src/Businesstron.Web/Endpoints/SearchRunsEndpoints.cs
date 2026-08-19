@@ -4,6 +4,7 @@ using Businesstron.Application.SearchRuns.Commands.DeleteSearchRun;
 using Businesstron.Application.SearchRuns.Commands.PushRunToOntraport;
 using Businesstron.Application.SearchRuns.Commands.RetryFailedEnrichment;
 using Businesstron.Application.SearchRuns.Commands.RunWebEnrichment;
+using Businesstron.Application.SearchRuns.Commands.StopWebEnrichment;
 using Businesstron.Application.SearchRuns.Commands.UpdateSearchRunTags;
 using Businesstron.Application.SearchRuns.Queries.ExportSearchRunCsv;
 using Businesstron.Application.SearchRuns.Queries.GetSearchRun;
@@ -72,6 +73,13 @@ public static class SearchRunsEndpoints
         group.MapPost("/{id:guid}/enrich-web", async (Guid id, ISender sender) =>
         {
             await sender.Send(new RunWebEnrichmentCommand(id));
+            return Results.Accepted();
+        });
+
+        // Cooperatively stop the web-enrichment stage (separate from the ABN search's Stop).
+        group.MapPost("/{id:guid}/stop-web-enrichment", async (Guid id, ISender sender) =>
+        {
+            await sender.Send(new StopWebEnrichmentCommand(id));
             return Results.Accepted();
         });
 

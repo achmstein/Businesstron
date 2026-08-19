@@ -40,12 +40,31 @@ export type RecordFilter =
   | 'nowebsite'
 export type SearchRunStatus = 'Pending' | 'Running' | 'Completed' | 'Failed' | 'Cancelled'
 
+export type WebEnrichmentRunState =
+  | 'NotRequested'
+  | 'Queued'
+  | 'Running'
+  | 'Completed'
+  | 'Cancelled'
+  | 'Failed'
+
+// The stage-aware badge value: the ASIC statuses, plus the web-stage phases that show
+// once ASIC is done but the pipeline isn't.
+export type OverallStatus =
+  | SearchRunStatus
+  | 'WebQueued'
+  | 'EnrichingWeb'
+  | 'WebStopped'
+  | 'WebFailed'
+
 export interface SearchRunDto {
   id: string
   source: SearchSource
   startDate: string | null
   endDate: string | null
   status: SearchRunStatus
+  overallStatus: OverallStatus
+  webEnrichmentState: WebEnrichmentRunState
   cancellationRequested: boolean
   totalItems: number
   processedItems: number
@@ -111,6 +130,10 @@ export interface BusinessNameRecordDto {
 }
 
 export interface WebEnrichmentSummary {
+  state: WebEnrichmentRunState
+  active: boolean
+  stopping: boolean
+  error: string | null
   notAttempted: number
   pending: number
   skipped: number
@@ -222,6 +245,7 @@ export const api = {
     cancel: (id: string) => apiFetch<void>(`/api/search-runs/${id}/cancel`, { method: 'POST' }),
     retryFailed: (id: string) => apiFetch<void>(`/api/search-runs/${id}/retry`, { method: 'POST' }),
     enrichWeb: (id: string) => apiFetch<void>(`/api/search-runs/${id}/enrich-web`, { method: 'POST' }),
+    stopWebEnrichment: (id: string) => apiFetch<void>(`/api/search-runs/${id}/stop-web-enrichment`, { method: 'POST' }),
     remove: (id: string) => apiFetch<void>(`/api/search-runs/${id}`, { method: 'DELETE' }),
     exportHref: (id: string, onlySuitable = false) =>
       `/api/search-runs/${id}/export${onlySuitable ? '?onlySuitable=true' : ''}`,

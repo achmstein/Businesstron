@@ -1,3 +1,5 @@
+using Businesstron.Domain.Enums;
+
 namespace Businesstron.Application.SearchRuns.Queries;
 
 public class SearchRunDto
@@ -6,7 +8,18 @@ public class SearchRunDto
     public string Source { get; init; } = string.Empty;
     public DateOnly? StartDate { get; init; }
     public DateOnly? EndDate { get; init; }
+
+    /// <summary>The raw ASIC-stage status (Pending/Running/Completed/Failed/Cancelled).</summary>
     public string Status { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Stage-aware status for the badge: reflects the whole pipeline, so a run whose ASIC
+    /// stage is done but whose web stage is still going reads "Enriching web", not "Completed".
+    /// </summary>
+    public string OverallStatus { get; init; } = string.Empty;
+
+    /// <summary>Run-level web-enrichment state (for list-view badges/indicators).</summary>
+    public string WebEnrichmentState { get; init; } = nameof(WebEnrichmentRunState.NotRequested);
     public bool CancellationRequested { get; init; }
     public int TotalItems { get; init; }
     public int ProcessedItems { get; init; }
@@ -36,6 +49,8 @@ public class SearchRunDto
         StartDate = r.StartDate,
         EndDate = r.EndDate,
         Status = r.Status.ToString(),
+        OverallStatus = DeriveOverallStatus(r),
+        WebEnrichmentState = r.WebEnrichmentState.ToString(),
         CancellationRequested = r.CancellationRequested,
         TotalItems = r.TotalItems,
         ProcessedItems = r.ProcessedItems,
@@ -58,4 +73,34 @@ public class SearchRunDto
         WebEmailCount = webEmailCount,
         WebPendingCount = webPendingCount
     };
+
+    /// <summary>
+    /// Rolls the ASIC status and the web-stage state into one badge value. The run only
+    /// reads "Completed" once every enabled stage is done; while the web stage runs it
+    /// reports that stage instead.
+    /// </summary>
+    private static string DeriveOverallStatus(SearchRun r)
+    {
+        // Any ASIC-stage state other than Completed is the overall state — the web stage
+        // hasn't started yet.
+        if (r.Status != SearchRunStatus.Completed)
+        {
+            return r.Status.ToString();
+        }
+
+        if (!r.EnableWebEnrichment)
+        {
+            return nameof(SearchRunStatus.Completed);
+        }
+
+        return r.WebEnrichmentState switch
+        {
+            WebEnrichmentRunState.Queued => "WebQueued",
+            WebEnrichmentRunState.Running => "EnrichingWeb",
+            WebEnrichmentRunState.Cancelled => "WebStopped",
+            WebEnrichmentRunState.Failed => "WebFailed",
+            // Completed, or NotRequested (opted in but never handed off yet).
+            _ => nameof(SearchRunStatus.Completed)
+        };
+    }
 }

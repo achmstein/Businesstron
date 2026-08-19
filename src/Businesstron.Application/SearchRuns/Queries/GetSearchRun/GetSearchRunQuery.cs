@@ -105,8 +105,18 @@ public class GetSearchRunQueryHandler(IApplicationDbContext context)
 
             int C(WebEnrichmentStatus s) => byStatus.TryGetValue(s, out var n) ? n : 0;
 
+            // A live worker = Running with a heartbeat inside the staleness window; anything
+            // older means the job died and the stage can be safely re-run.
+            var active = run.WebEnrichmentState == WebEnrichmentRunState.Running
+                && run.WebEnrichmentHeartbeat is { } beat
+                && beat > DateTimeOffset.UtcNow.AddMinutes(-5);
+
             web = new WebEnrichmentSummaryDto
             {
+                State = run.WebEnrichmentState.ToString(),
+                Active = active,
+                Stopping = active && run.WebEnrichmentCancellationRequested,
+                Error = run.WebEnrichmentError,
                 NotAttempted = C(WebEnrichmentStatus.NotAttempted),
                 Pending = C(WebEnrichmentStatus.Pending),
                 Skipped = C(WebEnrichmentStatus.Skipped),

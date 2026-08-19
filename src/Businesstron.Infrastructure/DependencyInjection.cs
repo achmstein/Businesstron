@@ -121,11 +121,22 @@ public static class DependencyInjection
         services.AddSingleton<ISettingsService, SettingsService>();
 
         // --- Background jobs ---
+        // Sliding invisibility: a live worker keeps refreshing its job's lock (so a
+        // long-running enrichment is never double-fetched), while a job orphaned by a
+        // redeploy is reclaimed and resumed within the timeout — not the 30-minute default
+        // that made an interrupted run look stuck.
         services.AddHangfire(config => config
             .SetDataCompatibilityLevel(CompatibilityLevel.Version_180)
             .UseSimpleAssemblyNameTypeSerializer()
             .UseRecommendedSerializerSettings()
-            .UsePostgreSqlStorage(c => c.UseNpgsqlConnection(connectionString)));
+            .UsePostgreSqlStorage(
+                c => c.UseNpgsqlConnection(connectionString),
+                new PostgreSqlStorageOptions
+                {
+                    UseSlidingInvisibilityTimeout = true,
+                    InvisibilityTimeout = TimeSpan.FromMinutes(5),
+                    QueuePollInterval = TimeSpan.FromSeconds(15)
+                }));
 
         services.AddHangfireServer(options => options.WorkerCount = 3);
 

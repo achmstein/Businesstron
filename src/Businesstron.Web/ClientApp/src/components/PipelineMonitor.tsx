@@ -39,16 +39,23 @@ function computeStages(run: SearchRunDto, web?: WebEnrichmentSummary): Stage[] {
   // The optional web stage only appears for runs that opted in. It sits between the
   // filter and the Ontraport push (emails are found before the contacts are pushed).
   if (run.enableWebEnrichment && web) {
-    const webActive = web.running
-    const webDone = web.eligible > 0 && web.processed >= web.eligible
+    const webState: StageState =
+      web.state === 'Running' ? (web.active ? 'active' : 'failed') // Running but no heartbeat = stalled
+        : web.state === 'Completed' ? 'done'
+        : web.state === 'Failed' ? 'failed'
+        : web.state === 'Queued' ? 'active'
+        : web.state === 'Cancelled' ? 'ready'
+        : 'pending'
     stages.push({
       key: 'web', label: 'Websites', icon: Globe,
-      detail: web.running
+      detail: web.active
         ? `${web.processed}/${web.eligible}`
-        : web.withEmail > 0
-          ? `${web.withEmail} emails`
-          : web.eligible > 0 ? 'done' : 'ready',
-      state: webActive ? 'active' : webDone ? 'done' : web.failed > 0 ? 'failed' : 'pending',
+        : web.state === 'Cancelled'
+          ? 'stopped'
+          : web.withEmail > 0
+            ? `${web.withEmail} emails`
+            : web.eligible > 0 ? 'done' : 'ready',
+      state: webState,
     })
   }
 
