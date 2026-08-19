@@ -56,13 +56,15 @@ export default function NewSearchDialog({ open, onOpenChange }: { open: boolean;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl">
+      {/* Cap height and let the body scroll so the footer stays reachable on short
+          (mobile) viewports; the header stays pinned while the form scrolls. */}
+      <DialogContent className="grid max-h-[90dvh] max-w-xl grid-rows-[auto_minmax(0,1fr)] overflow-hidden">
         <DialogHeader>
           <DialogTitle className="font-display text-xl">New search</DialogTitle>
           <DialogDescription>Harvest business names, then enrich, filter and push suitable leads.</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={submit} className="space-y-5">
+        <form onSubmit={submit} className="space-y-5 overflow-y-auto pr-1">
           <div>
             <Label className="mb-2">Data source</Label>
             <div className="grid grid-cols-2 gap-3">

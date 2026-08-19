@@ -51,6 +51,14 @@ public sealed partial class AudaClient(
 
                 if (IsResultPage(html))
                 {
+                    // Politeness pause after a successful lookup so a run of website-having
+                    // records doesn't spike auda's rate limiter (which returns 403 and, with
+                    // enough of them, trips the web-stage failure breaker).
+                    if (opts.DelayBetweenRequestsMs > 0)
+                    {
+                        await Task.Delay(opts.DelayBetweenRequestsMs, cancellationToken);
+                    }
+
                     return AudaLookupResult.Ok(ExtractEmails(html));
                 }
 
