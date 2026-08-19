@@ -23,6 +23,7 @@ public interface ICaptchaSolver
 {
     bool IsConfigured { get; }
 
+    /// <param name="enterprise">True for reCAPTCHA Enterprise (score-based when an action is given).</param>
     Task<CaptchaSolveResult> SolveReCaptchaAsync(
-        string siteKey, string pageUrl, string? action, bool invisible, CancellationToken cancellationToken);
+        string siteKey, string pageUrl, string? action, bool invisible, bool enterprise, CancellationToken cancellationToken);
 }

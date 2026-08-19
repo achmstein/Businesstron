@@ -6,8 +6,17 @@ public class AudaOptions
 
     public string BaseUrl { get; set; } = "https://whois.auda.org.au/";
 
-    /// <summary>auda's public reCAPTCHA v2 site key (belongs to their page, not a secret).</summary>
+    /// <summary>
+    /// auda's public reCAPTCHA Enterprise *checkbox* site key (belongs to their page, not
+    /// a secret). This is the key behind the "I'm not a robot" fallback auda accepts when
+    /// its frictionless score check is not satisfied — the path we drive, since solving
+    /// services can clear a checkbox but not a score gate. Distinct from the score-check
+    /// key the landing page loads.
+    /// </summary>
     public string RecaptchaSiteKey { get; set; } = "6Ld3MSMqAAAAAIU_qrBNaNvuLzZf5EaSDwhEdJYA";
+
+    /// <summary>The reCAPTCHA Enterprise action auda's checkbox is rendered with.</summary>
+    public string RecaptchaAction { get; set; } = "WhoisWebQuery";
 
     public string UserAgent { get; set; } =
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36 Edg/138.0.0.0";

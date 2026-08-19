@@ -206,7 +206,7 @@ public sealed class WebEnrichmentService(
 
             string? primaryEmail = null;
             IReadOnlyList<string> emails = [];
-            var anyLookupError = false;
+            string? lastLookupError = null;
 
             // Try each domain in turn; stop at the first that yields an email.
             foreach (var domain in domains)
@@ -214,7 +214,7 @@ public sealed class WebEnrichmentService(
                 var lookup = await auda.LookupAsync(domain, cancellationToken);
                 if (!lookup.Succeeded)
                 {
-                    anyLookupError = true;
+                    lastLookupError = lookup.Error ?? "auda lookup failed.";
                     continue;
                 }
 
@@ -240,10 +240,10 @@ public sealed class WebEnrichmentService(
 
             var outcome = primaryEmail is not null
                 ? Outcome.Enriched
-                : anyLookupError ? Outcome.Failed : Outcome.NoEmail;
+                : lastLookupError is not null ? Outcome.Failed : Outcome.NoEmail;
 
             var error = outcome == Outcome.Failed
-                ? "All auda lookups failed for this record's domains."
+                ? $"All auda lookups failed for this record's domains. Last error: {lastLookupError}"
                 : null;
 
             return new FetchResult(record, outcome, domains, primaryEmail, emails, contactResult, error);

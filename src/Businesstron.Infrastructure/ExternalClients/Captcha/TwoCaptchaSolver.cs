@@ -15,7 +15,7 @@ public sealed class TwoCaptchaSolver(IOptionsMonitor<TwoCaptchaOptions> options,
     public bool IsConfigured => !string.IsNullOrWhiteSpace(Options.ApiKey);
 
     public async Task<CaptchaSolveResult> SolveReCaptchaAsync(
-        string siteKey, string pageUrl, string? action, bool invisible, CancellationToken cancellationToken)
+        string siteKey, string pageUrl, string? action, bool invisible, bool enterprise, CancellationToken cancellationToken)
     {
         var opts = Options;
 
@@ -38,7 +38,7 @@ public sealed class TwoCaptchaSolver(IOptionsMonitor<TwoCaptchaOptions> options,
             captcha.SetSiteKey(siteKey);
             captcha.SetUrl(pageUrl);
             captcha.SetInvisible(invisible);
-            captcha.SetEnterprise(false);
+            captcha.SetEnterprise(enterprise);
             if (!string.IsNullOrEmpty(action))
             {
                 captcha.SetAction(action);

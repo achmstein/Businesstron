@@ -49,16 +49,15 @@ public sealed partial class AudaClient(
             {
                 var html = await LookupOnceAsync(http, opts, domain, cancellationToken);
 
-                if (IsForm(html))
-                {
-                    // The form came back — the CAPTCHA was rejected. Retry with a fresh solve.
-                    lastError = "auda returned the query form (CAPTCHA rejected).";
-                    logger.LogDebug("auda lookup for {Domain} attempt {Attempt} rejected; retrying.", domain, attempt);
-                }
-                else
+                if (IsResultPage(html))
                 {
                     return AudaLookupResult.Ok(ExtractEmails(html));
                 }
+
+                // The query form came back instead of results — the CAPTCHA was rejected.
+                // Retry with a fresh solve.
+                lastError = "auda returned the query form (CAPTCHA rejected).";
+                logger.LogDebug("auda lookup for {Domain} attempt {Attempt} rejected; retrying.", domain, attempt);
             }
             catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
             {
@@ -86,9 +85,14 @@ public sealed partial class AudaClient(
         var token = ExtractToken(page)
             ?? throw new InvalidOperationException("Could not extract auda antiforgery token.");
 
-        // 2) Solve the reCAPTCHA v2 checkbox via the shared solver.
+        // 2) Solve auda's reCAPTCHA Enterprise CHECKBOX. As of Aug 2026 the page's initial
+        //    landing captcha is a frictionless Enterprise *score* check (CaptchaType=Score)
+        //    that solving services can't clear — but auda still accepts a checkbox-verified
+        //    submission (its own fallback for a low score), which 2Captcha solves reliably.
+        //    So we always submit the checkbox flavour rather than the score one.
         var solve = await captcha.SolveReCaptchaAsync(
-            opts.RecaptchaSiteKey, opts.BaseUrl, action: null, invisible: false, ct);
+            opts.RecaptchaSiteKey, opts.BaseUrl,
+            action: opts.RecaptchaAction, invisible: false, enterprise: true, ct);
         if (!solve.Succeeded)
         {
             throw new InvalidOperationException(solve.Error ?? "CAPTCHA solve failed.");
@@ -114,11 +118,15 @@ public sealed partial class AudaClient(
         return match.Success ? match.Groups[1].Value : null;
     }
 
-    /// <summary>True when the response is still the query form (i.e. no WHOIS data was returned).</summary>
-    private static bool IsForm(string html) =>
-        html.Contains("Enter the .au domain name you want to query", StringComparison.OrdinalIgnoreCase) ||
-        html.Contains("id=\"Query\"", StringComparison.OrdinalIgnoreCase) ||
-        html.Contains("Unable to load captcha", StringComparison.OrdinalIgnoreCase);
+    /// <summary>
+    /// True when auda returned the WHOIS results page (as opposed to bouncing back the
+    /// query form on a CAPTCHA rejection). The results page still embeds the search form,
+    /// so we key off the results header/content rather than the absence of the form.
+    /// </summary>
+    private static bool IsResultPage(string html) =>
+        html.Contains("WHOIS Search Results", StringComparison.OrdinalIgnoreCase) ||
+        html.Contains("whoisHeader", StringComparison.OrdinalIgnoreCase) ||
+        html.Contains("whoisContent", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Distinct contact emails in the WHOIS text, minus the noreply/abuse boilerplate.</summary>
     private static IReadOnlyList<string> ExtractEmails(string text)

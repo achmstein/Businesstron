@@ -337,7 +337,7 @@ public sealed class AsicRegistryClient : IAsicRegistryClient, IDisposable
             var url = $"{_options.BaseUrl}RegistrySearch/faces/landing/panelSearch.jspx?Adf-Window-Id={adfWindowId}&Adf-Page-Id=0";
 
             var solve = await _captcha.SolveReCaptchaAsync(
-                _options.RecaptchaSiteKey, url, action: "userverify", invisible: true, cancellationToken);
+                _options.RecaptchaSiteKey, url, action: "userverify", invisible: true, enterprise: false, cancellationToken);
 
             if (!solve.Succeeded)
             {
