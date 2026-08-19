@@ -5,7 +5,8 @@ using Microsoft.EntityFrameworkCore;
 
 namespace Businesstron.Application.SearchRuns.Commands.PushRunToOntraport;
 
-public record PushRunToOntraportCommand(Guid SearchRunId) : IRequest;
+/// <param name="OnlyWithContact">Push only leads that have a contact email, rather than every suitable business.</param>
+public record PushRunToOntraportCommand(Guid SearchRunId, bool OnlyWithContact = false) : IRequest;
 
 public class PushRunToOntraportCommandHandler(IApplicationDbContext context, IJobScheduler jobs)
     : IRequestHandler<PushRunToOntraportCommand>
@@ -20,6 +21,6 @@ public class PushRunToOntraportCommandHandler(IApplicationDbContext context, IJo
             throw new NotFoundException(nameof(SearchRun), request.SearchRunId);
         }
 
-        jobs.EnqueuePush(request.SearchRunId);
+        jobs.EnqueuePush(request.SearchRunId, request.OnlyWithContact);
     }
 }

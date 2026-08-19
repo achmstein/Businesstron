@@ -241,14 +241,15 @@ export const api = {
       apiFetch<void>(`/api/search-runs/${id}/tags`, { method: 'PUT', body: JSON.stringify({ tags }) }),
     create: (input: CreateSearchRunInput) =>
       apiFetch<{ id: string }>('/api/search-runs', { method: 'POST', body: JSON.stringify(input) }),
-    push: (id: string) => apiFetch<void>(`/api/search-runs/${id}/push`, { method: 'POST' }),
+    push: (id: string, onlyWithContact = false) =>
+      apiFetch<void>(`/api/search-runs/${id}/push${onlyWithContact ? '?onlyWithContact=true' : ''}`, { method: 'POST' }),
     cancel: (id: string) => apiFetch<void>(`/api/search-runs/${id}/cancel`, { method: 'POST' }),
     retryFailed: (id: string) => apiFetch<void>(`/api/search-runs/${id}/retry`, { method: 'POST' }),
     enrichWeb: (id: string) => apiFetch<void>(`/api/search-runs/${id}/enrich-web`, { method: 'POST' }),
     stopWebEnrichment: (id: string) => apiFetch<void>(`/api/search-runs/${id}/stop-web-enrichment`, { method: 'POST' }),
     remove: (id: string) => apiFetch<void>(`/api/search-runs/${id}`, { method: 'DELETE' }),
-    exportHref: (id: string, onlySuitable = false) =>
-      `/api/search-runs/${id}/export${onlySuitable ? '?onlySuitable=true' : ''}`,
+    exportHref: (id: string, filter?: 'suitable' | 'contacts') =>
+      `/api/search-runs/${id}/export${filter ? `?filter=${filter}` : ''}`,
   },
 
   users: {

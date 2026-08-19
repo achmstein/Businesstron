@@ -12,8 +12,11 @@ namespace Businesstron.Application.SearchRuns.Queries.ExportSearchRunCsv;
 /// </summary>
 public sealed record CsvFileStream(string FileName, Func<Stream, CancellationToken, Task> WriteTo);
 
-/// <param name="OnlySuitable">When true, exclude records the keyword filter flagged unsuitable.</param>
-public record ExportSearchRunCsvQuery(Guid Id, bool OnlySuitable = false) : IRequest<CsvFileStream>;
+/// <param name="Filter">
+/// Which records to include: "suitable" (keyword-filter passed), "contacts" (has a website
+/// or a contact email), or anything else / null for all records.
+/// </param>
+public record ExportSearchRunCsvQuery(Guid Id, string? Filter = null) : IRequest<CsvFileStream>;
 
 public class ExportSearchRunCsvQueryHandler(IApplicationDbContext context, ICsvExporter exporter)
     : IRequestHandler<ExportSearchRunCsvQuery, CsvFileStream>
@@ -29,13 +32,17 @@ public class ExportSearchRunCsvQueryHandler(IApplicationDbContext context, ICsvE
             .AsNoTracking()
             .Where(r => r.SearchRunId == request.Id);
 
-        if (request.OnlySuitable)
+        var filter = request.Filter?.ToLowerInvariant();
+        query = filter switch
         {
-            query = query.Where(r => r.IsSuitable);
-        }
+            "suitable" => query.Where(r => r.IsSuitable),
+            "contacts" => query.Where(r => r.Websites != null || r.ContactEmail != null),
+            _ => query
+        };
 
         var records = query.OrderBy(r => r.BusinessName);
-        var fileName = $"businesstron-{run.Created:yyyyMMdd-HHmmss}.csv";
+        var suffix = filter is "suitable" or "contacts" ? $"-{filter}" : "";
+        var fileName = $"businesstron-{run.Created:yyyyMMdd-HHmmss}{suffix}.csv";
 
         return new CsvFileStream(
             fileName,

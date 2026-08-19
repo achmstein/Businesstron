@@ -10,7 +10,7 @@ public interface IJobScheduler
     void EnqueueProcess(Guid searchRunId);
 
     /// <summary>Enqueue an Ontraport push for a run's suitable, not-yet-pushed records.</summary>
-    void EnqueuePush(Guid searchRunId);
+    void EnqueuePush(Guid searchRunId, bool onlyWithContact = false);
 
     /// <summary>Enqueue a re-enrichment pass over a run's failed/pending records.</summary>
     void EnqueueRetry(Guid searchRunId);

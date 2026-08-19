@@ -11,6 +11,7 @@ import TagInput from '../components/TagInput'
 import { Button } from '@/components/ui/button'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
 // Keyword chips shown before collapsing behind "+N more" (runs can carry hundreds).
@@ -36,6 +37,8 @@ export default function SearchDetailPage() {
   const [busy, setBusy] = useState(false)
   const [webBusy, setWebBusy] = useState(false)
   const [deleteOpen, setDeleteOpen] = useState(false)
+  const [exportOpen, setExportOpen] = useState(false)
+  const [pushOpen, setPushOpen] = useState(false)
   const [showAllKeywords, setShowAllKeywords] = useState(false)
   const [page, setPage] = useState(1)
   const [filter, setFilter] = useState<RecordFilter | null>(null)
@@ -63,11 +66,12 @@ export default function SearchDetailPage() {
     return () => clearInterval(timer)
   }, [load])
 
-  const push = async () => {
+  const push = async (onlyWithContact: boolean) => {
     if (!id) return
     setPushing(true)
     try {
-      await api.searchRuns.push(id)
+      await api.searchRuns.push(id, onlyWithContact)
+      setPushOpen(false)
       toast.success('Ontraport push queued', { description: 'Row statuses update as leads are pushed.' })
     } catch (err) {
       toast.error(err instanceof Error ? err.message : 'Push failed')
@@ -178,7 +182,7 @@ export default function SearchDetailPage() {
   const stats: { label: string; value: string | number; tone?: string; filter?: RecordFilter }[] = [
     { label: 'Progress', value: `${run.processedItems}/${run.totalItems}` },
     { label: 'Found', value: run.foundRecords },
-    { label: 'Suitable', value: run.suitableCount, tone: 'text-emerald-700 dark:text-emerald-300', filter: 'suitable' },
+    { label: 'Suitable', value: run.suitableCount, filter: 'suitable' },
     { label: 'Pushed', value: run.pushedCount, filter: 'pushed' },
     { label: 'Errors', value: run.errorCount, tone: run.errorCount > 0 ? 'text-red-700 dark:text-red-300' : undefined, filter: 'errors' },
   ]
@@ -187,7 +191,7 @@ export default function SearchDetailPage() {
   // scattered across hundreds of pages — are one click away.
   const webTiles: { label: string; value: number; tone?: string; filter: RecordFilter }[] = [
     { label: 'Websites', value: web.withWebsite, filter: 'websites' },
-    { label: 'Emails', value: web.withEmail, tone: 'text-emerald-700 dark:text-emerald-300', filter: 'emails' },
+    { label: 'Emails', value: web.withEmail, filter: 'emails' },
     { label: 'Queued', value: web.pending, filter: 'webpending' },
     { label: 'No website', value: web.noWebsite, filter: 'nowebsite' },
     { label: 'Failed', value: web.failed, tone: web.failed > 0 ? 'text-red-700 dark:text-red-300' : undefined, filter: 'webfailed' },
@@ -260,9 +264,8 @@ export default function SearchDetailPage() {
               </Button>
             )
           )}
-          <Button asChild variant="outline" size="sm"><a href={api.searchRuns.exportHref(run.id, false)}><Download className="size-4" /> CSV</a></Button>
-          <Button asChild variant="outline" size="sm"><a href={api.searchRuns.exportHref(run.id, true)}><Download className="size-4" /> Suitable</a></Button>
-          <Button size="sm" onClick={push} disabled={pushing || run.suitableCount === 0}><Send className="size-4" /> {pushing ? 'Queuing…' : 'Push to Ontraport'}</Button>
+          <Button variant="outline" size="sm" onClick={() => setExportOpen(true)}><Download className="size-4" /> Export CSV</Button>
+          <Button size="sm" onClick={() => setPushOpen(true)} disabled={pushing || run.suitableCount === 0}><Send className="size-4" /> {pushing ? 'Queuing…' : 'Push to Ontraport'}</Button>
           <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-destructive" onClick={() => setDeleteOpen(true)} title="Delete search">
             <Trash2 className="size-4" />
           </Button>
@@ -297,7 +300,7 @@ export default function SearchDetailPage() {
             Excluding {run.appliedKeywords.length.toLocaleString()} keyword{run.appliedKeywords.length > 1 ? 's' : ''}
           </span>
           {(showAllKeywords ? run.appliedKeywords : run.appliedKeywords.slice(0, KEYWORDS_PREVIEW)).map((k) => (
-            <span key={k} className="rounded-md border border-primary/30 bg-primary/10 px-1.5 py-0.5 font-mono text-primary">{k}</span>
+            <span key={k} className="rounded-md border bg-muted px-1.5 py-0.5 font-mono text-muted-foreground">{k}</span>
           ))}
           {run.appliedKeywords.length > KEYWORDS_PREVIEW && (
             <button
@@ -521,7 +524,7 @@ export default function SearchDetailPage() {
                     {pending ? (
                       <span className="text-xs text-muted-foreground">—</span>
                     ) : r.isSuitable ? (
-                      <span className="text-sm text-emerald-700 dark:text-emerald-300">Yes</span>
+                      <span className="text-sm text-foreground">Yes</span>
                     ) : (
                       <Tooltip>
                         <TooltipTrigger className="text-sm text-amber-800 dark:text-amber-300">No</TooltipTrigger>
@@ -608,6 +611,67 @@ export default function SearchDetailPage() {
         destructive
         onConfirm={remove}
       />
+
+      <Dialog open={exportOpen} onOpenChange={setExportOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Export CSV</DialogTitle>
+            <DialogDescription>Choose which records to include.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            {[
+              { label: 'All records', count: data.recordsTotalCount, href: api.searchRuns.exportHref(run.id) },
+              { label: 'Suitable only', count: run.suitableCount, href: api.searchRuns.exportHref(run.id, 'suitable') },
+              { label: 'With website or email', count: web.withWebsite, href: api.searchRuns.exportHref(run.id, 'contacts') },
+            ].map((opt) => (
+              <a
+                key={opt.label}
+                href={opt.href}
+                onClick={() => setExportOpen(false)}
+                className="flex items-center justify-between rounded-lg border px-3 py-2.5 text-sm transition-colors hover:border-primary/40 hover:bg-accent"
+              >
+                <span className="flex items-center gap-2"><Download className="size-4 text-muted-foreground" /> {opt.label}</span>
+                <span className="font-mono text-xs tabular-nums text-muted-foreground">{opt.count.toLocaleString()}</span>
+              </a>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={pushOpen} onOpenChange={setPushOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Push to Ontraport</DialogTitle>
+            <DialogDescription>Choose which leads to push. Already-pushed leads are skipped.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-2">
+            <button
+              type="button"
+              onClick={() => push(false)}
+              disabled={pushing}
+              className="flex items-center justify-between rounded-lg border px-3 py-2.5 text-left text-sm transition-colors hover:border-primary/40 hover:bg-accent disabled:opacity-60"
+            >
+              <span>
+                <span className="font-medium">All suitable</span>
+                <span className="block text-xs text-muted-foreground">Every suitable lead, with or without an email</span>
+              </span>
+              <span className="font-mono text-xs tabular-nums text-muted-foreground">{run.suitableCount.toLocaleString()}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => push(true)}
+              disabled={pushing}
+              className="flex items-center justify-between rounded-lg border px-3 py-2.5 text-left text-sm transition-colors hover:border-primary/40 hover:bg-accent disabled:opacity-60"
+            >
+              <span>
+                <span className="font-medium">Only with contact email</span>
+                <span className="block text-xs text-muted-foreground">Leads that have a contact email</span>
+              </span>
+              <span className="font-mono text-xs tabular-nums text-muted-foreground">{web.withEmail.toLocaleString()}</span>
+            </button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -421,13 +421,13 @@ public sealed class SearchProcessingService(
         }
     }
 
-    public async Task PushToOntraportAsync(Guid searchRunId, CancellationToken cancellationToken)
+    public async Task PushToOntraportAsync(Guid searchRunId, bool onlyWithContact, CancellationToken cancellationToken)
     {
         var run = await db.SearchRuns.FirstOrDefaultAsync(r => r.Id == searchRunId, cancellationToken);
         if (run is null) return;
 
         var config = await db.OntraportConfigurations.FirstOrDefaultAsync(cancellationToken);
-        await PushInternalAsync(run, config?.TagId, config?.SequenceId, cancellationToken);
+        await PushInternalAsync(run, config?.TagId, config?.SequenceId, onlyWithContact, cancellationToken);
     }
 
     public async Task RetryFailedAsync(Guid searchRunId, CancellationToken cancellationToken)
@@ -560,11 +560,12 @@ public sealed class SearchProcessingService(
         var config = await db.OntraportConfigurations.FirstOrDefaultAsync(cancellationToken);
         if (config?.AutoPushEnabled == true && ontraport.IsConfigured)
         {
-            await PushInternalAsync(run, config.TagId, config.SequenceId, cancellationToken);
+            await PushInternalAsync(run, config.TagId, config.SequenceId, onlyWithContact: false, cancellationToken);
         }
     }
 
-    private async Task PushInternalAsync(SearchRun run, int? tagId, int? sequenceId, CancellationToken cancellationToken)
+    private async Task PushInternalAsync(
+        SearchRun run, int? tagId, int? sequenceId, bool onlyWithContact, CancellationToken cancellationToken)
     {
         if (!ontraport.IsConfigured)
         {
@@ -576,7 +577,10 @@ public sealed class SearchProcessingService(
             .Where(r => r.SearchRunId == run.Id
                 && r.IsSuitable
                 && r.EnrichmentStatus == EnrichmentStatus.Enriched
-                && r.OntraportStatus != OntraportPushStatus.Pushed)
+                && r.OntraportStatus != OntraportPushStatus.Pushed
+                // "Only with contact" scopes the push to leads that carry an email — the
+                // records worth a sequence — rather than every suitable business.
+                && (!onlyWithContact || r.ContactEmail != null))
             .ToListAsync(cancellationToken);
 
         foreach (var record in records)

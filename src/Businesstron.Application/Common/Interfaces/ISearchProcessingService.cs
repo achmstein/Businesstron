@@ -10,7 +10,7 @@ public interface ISearchProcessingService
     Task ProcessAsync(Guid searchRunId, CancellationToken cancellationToken);
 
     /// <summary>Push a run's suitable, not-yet-pushed records to Ontraport.</summary>
-    Task PushToOntraportAsync(Guid searchRunId, CancellationToken cancellationToken);
+    Task PushToOntraportAsync(Guid searchRunId, bool onlyWithContact, CancellationToken cancellationToken);
 
     /// <summary>Re-run enrichment for a run's failed/pending records.</summary>
     Task RetryFailedAsync(Guid searchRunId, CancellationToken cancellationToken);

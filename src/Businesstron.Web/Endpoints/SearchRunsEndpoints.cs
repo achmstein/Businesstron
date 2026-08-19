@@ -41,18 +41,18 @@ public static class SearchRunsEndpoints
             return Results.NoContent();
         });
 
-        group.MapGet("/{id:guid}/export", async (Guid id, bool? onlySuitable, ISender sender, HttpContext http) =>
+        group.MapGet("/{id:guid}/export", async (Guid id, string? filter, ISender sender, HttpContext http) =>
         {
-            var file = await sender.Send(new ExportSearchRunCsvQuery(id, onlySuitable ?? false));
+            var file = await sender.Send(new ExportSearchRunCsvQuery(id, filter));
             return Results.Stream(
                 stream => file.WriteTo(stream, http.RequestAborted),
                 "text/csv",
                 file.FileName);
         });
 
-        group.MapPost("/{id:guid}/push", async (Guid id, ISender sender) =>
+        group.MapPost("/{id:guid}/push", async (Guid id, bool? onlyWithContact, ISender sender) =>
         {
-            await sender.Send(new PushRunToOntraportCommand(id));
+            await sender.Send(new PushRunToOntraportCommand(id, onlyWithContact ?? false));
             return Results.Accepted();
         });
 

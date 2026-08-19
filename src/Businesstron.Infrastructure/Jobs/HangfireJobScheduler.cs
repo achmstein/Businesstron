@@ -9,8 +9,8 @@ public sealed class HangfireJobScheduler(IBackgroundJobClient jobs) : IJobSchedu
     public void EnqueueProcess(Guid searchRunId) =>
         jobs.Enqueue<ISearchProcessingService>(x => x.ProcessAsync(searchRunId, CancellationToken.None));
 
-    public void EnqueuePush(Guid searchRunId) =>
-        jobs.Enqueue<ISearchProcessingService>(x => x.PushToOntraportAsync(searchRunId, CancellationToken.None));
+    public void EnqueuePush(Guid searchRunId, bool onlyWithContact = false) =>
+        jobs.Enqueue<ISearchProcessingService>(x => x.PushToOntraportAsync(searchRunId, onlyWithContact, CancellationToken.None));
 
     public void EnqueueRetry(Guid searchRunId) =>
         jobs.Enqueue<ISearchProcessingService>(x => x.RetryFailedAsync(searchRunId, CancellationToken.None));

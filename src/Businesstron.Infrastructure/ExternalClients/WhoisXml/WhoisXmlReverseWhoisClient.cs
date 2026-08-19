@@ -53,7 +53,22 @@ public sealed class WhoisXmlReverseWhoisClient(
         };
 
         using var response = await http.PostAsJsonAsync(opts.BaseUrl, request, Json, cancellationToken);
-        response.EnsureSuccessStatusCode();
+
+        if (!response.IsSuccessStatusCode)
+        {
+            // WhoisXML returns a JSON body explaining the failure (e.g. 403 "Access
+            // restricted. Reasons: insufficient credits balance, incorrect API key, or your
+            // IP is not on the allow-list."). Surface that instead of the framework's
+            // generic "Response status code does not indicate success" so a blocked run is
+            // self-explanatory in the UI rather than needing a log dive.
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            var detail = ExtractApiError(body);
+            var message = detail is not null
+                ? $"WhoisXML reverse-whois error ({(int)response.StatusCode}): {detail}"
+                : $"WhoisXML reverse-whois returned {(int)response.StatusCode} {response.ReasonPhrase}.";
+            logger.LogWarning("Reverse-whois failed for {Term}: {Message}", searchTerm, message);
+            throw new InvalidOperationException(message);
+        }
 
         var payload = await response.Content.ReadFromJsonAsync<ReverseWhoisResponse>(Json, cancellationToken);
 
@@ -70,6 +85,42 @@ public sealed class WhoisXmlReverseWhoisClient(
 
         logger.LogDebug("Reverse-whois for {Term} returned {Count} domain(s).", searchTerm, domains.Count);
         return domains;
+    }
+
+    /// <summary>
+    /// Pulls the human-readable reason out of a WhoisXML error body
+    /// (<c>{"code":403,"messages":"…"}</c>), tolerating a string or array message and
+    /// falling back to a trimmed snippet for a non-JSON body. Null when nothing usable.
+    /// </summary>
+    private static string? ExtractApiError(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body)) return null;
+
+        try
+        {
+            using var doc = JsonDocument.Parse(body);
+            var root = doc.RootElement;
+            foreach (var field in (ReadOnlySpan<string>)["messages", "message", "error"])
+            {
+                if (root.TryGetProperty(field, out var v))
+                {
+                    return v.ValueKind switch
+                    {
+                        JsonValueKind.String => v.GetString(),
+                        JsonValueKind.Array => string.Join("; ",
+                            v.EnumerateArray().Select(e => e.GetString() ?? e.ToString())),
+                        _ => v.ToString()
+                    };
+                }
+            }
+
+            return null;
+        }
+        catch (JsonException)
+        {
+            var trimmed = body.Trim();
+            return trimmed.Length > 200 ? trimmed[..200] : trimmed;
+        }
     }
 
     /// <summary>The API returns bare domains, but trim any scheme/path just in case.</summary>

@@ -151,7 +151,7 @@ public sealed class WebEnrichmentService(
             var config = await db.OntraportConfigurations.FirstOrDefaultAsync(cancellationToken);
             if (config?.AutoPushEnabled == true)
             {
-                jobs.EnqueuePush(run.Id);
+                jobs.EnqueuePush(run.Id, onlyWithContact: false);
             }
         }
         // Shutdown (deploy/restart): stay Running with a now-stale heartbeat; let Hangfire

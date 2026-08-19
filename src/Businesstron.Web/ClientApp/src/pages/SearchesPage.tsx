@@ -77,13 +77,13 @@ export default function SearchesPage() {
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
         {[
           { label: 'Runs', value: runs.length },
-          { label: 'Suitable', value: totals.suitable, tone: 'text-emerald-700 dark:text-emerald-300' },
-          { label: 'Emails', value: totals.emails, tone: 'text-emerald-700 dark:text-emerald-300' },
+          { label: 'Suitable', value: totals.suitable },
+          { label: 'Emails', value: totals.emails },
           { label: 'Pushed', value: totals.pushed },
         ].map((s) => (
           <div key={s.label} className="rounded-xl border bg-card px-4 py-3">
             <div className="text-xs uppercase tracking-wide text-muted-foreground">{s.label}</div>
-            <div className={`mt-0.5 font-mono text-xl font-semibold tabular-nums ${s.tone ?? ''}`}>{s.value}</div>
+            <div className="mt-0.5 font-mono text-xl font-semibold tabular-nums">{s.value}</div>
           </div>
         ))}
         <div className="flex items-center justify-between gap-3 overflow-hidden rounded-xl border bg-card px-4 py-3">
@@ -163,11 +163,11 @@ export default function SearchesPage() {
                 </TableCell>
                 <TableCell className="font-mono text-xs tabular-nums text-muted-foreground">{run.processedItems}/{run.totalItems}</TableCell>
                 <TableCell className="text-right font-mono tabular-nums">{run.foundRecords}</TableCell>
-                <TableCell className="text-right font-mono tabular-nums text-emerald-700 dark:text-emerald-300">{run.suitableCount}</TableCell>
+                <TableCell className="text-right font-mono tabular-nums">{run.suitableCount}</TableCell>
                 <TableCell className="hidden text-right font-mono tabular-nums sm:table-cell">
                   {run.webEmailCount != null && run.webEmailCount > 0 ? (
-                    <span className="inline-flex items-center justify-end gap-1 text-emerald-700 dark:text-emerald-300">
-                      <Globe className="size-3 opacity-70" /> {run.webEmailCount.toLocaleString()}
+                    <span className="inline-flex items-center justify-end gap-1 text-foreground">
+                      <Globe className="size-3 text-muted-foreground" /> {run.webEmailCount.toLocaleString()}
                     </span>
                   ) : (
                     <span className="text-muted-foreground">—</span>
